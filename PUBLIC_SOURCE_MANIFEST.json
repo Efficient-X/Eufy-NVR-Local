@@ -25,8 +25,8 @@
       "size": 1086
     },
     "README.md": {
-      "sha256": "202da07ca63017476716205f8c9b83331a081711bd9374c655b456282208326b",
-      "size": 5863
+      "sha256": "1b23f0d906154f0a1ee08d44f5d1e921882b129b2180830ae2476cac0ae44d28",
+      "size": 5858
     },
     "THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -209,8 +209,8 @@
       "size": 13548
     },
     "custom_components/eufy_nvr/manifest.json": {
-      "sha256": "fc85c50e03ed9110f3758b3cf3ee1304ba8f8096d0508f145af6d80335a5ce2b",
-      "size": 484
+      "sha256": "e9adc23665b13e2ebea5b8efb756cd0dc433ac307210dbad9ad154fbf96dbc47",
+      "size": 474
     },
     "custom_components/eufy_nvr/snapshot.py": {
       "sha256": "cf12186f09cba88ccab5bec030df583cd4c75e1a6c1b1f553c31dda3f58f7bf0",
@@ -269,8 +269,8 @@
       "size": 16453
     },
     "eufy_nvr/Dockerfile": {
-      "sha256": "28d6253f9ae4cadc6fbed121419d0afb12414c1b3a8bcfddf0b4916cee1f3239",
-      "size": 3734
+      "sha256": "2d613de4a94c9ddafc50732a3e108e8f3a1eac4c6e53a1cb56869ef86d5368db",
+      "size": 3729
     },
     "eufy_nvr/THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -417,8 +417,8 @@
       "size": 3177
     },
     "eufy_nvr/config.yaml": {
-      "sha256": "ea685c38f8a55a0a43f2a42e71e605d387644f7176ebd1ccd71151a2807f2e56",
-      "size": 1523
+      "sha256": "a4ecfc6a13d01c6dba67e0e1a08e297b468f8b774618f131c886db1b9f506566",
+      "size": 1518
     },
     "eufy_nvr/guided-entry.sh": {
       "sha256": "cdd37d4e4e5b7ba2124cff8f935302a90e3ae040237e106118f4b7f1c457356b",
@@ -461,8 +461,8 @@
       "size": 55
     },
     "repository.yaml": {
-      "sha256": "7a1c4da3e6f4cf49f138c2a71662ab0e692d8f7b829adf846beef158c01f218c",
-      "size": 130
+      "sha256": "ec865c3133f0d9abbff9f17308caba167f5f67cda62dafbab33ce5b2c0aa5f81",
+      "size": 125
     },
     "tests/conftest.py": {
       "sha256": "78200ef755fd9015d6344827088cb22f2c63dcd73cf1450dcb3c16e45df13953",
@@ -661,8 +661,8 @@
       "size": 9980
     },
     "tools/stage_public_repository.py": {
-      "sha256": "b72dee212c60406f4e850f1faff347e13c6eab4a28f39bf5d2a7509ec8949a32",
-      "size": 11614
+      "sha256": "6e2cb5619066e02c6cecf686ce469f45118f77bc916de91c2e25d5b2fec260dd",
+      "size": 11609
     },
     "tools/verify_candidate.py": {
       "sha256": "d83b5609a20b610f7031433b7ce4ceff1573996df9fbed2003853ddd821fb28e",

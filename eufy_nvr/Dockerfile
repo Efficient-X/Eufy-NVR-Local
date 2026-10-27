@@ -7,7 +7,7 @@ ARG GO2RTC_SHA256_ARM64="359fabade8a7a51e81a55fe6df6b0ef81764a5e1d63179577534eaa
 
 LABEL org.opencontainers.image.title="Eufy NVR Local" \
     org.opencontainers.image.description="Local eufy S4/T8N00 WebRTC to RTSP bridge for Home Assistant" \
-    org.opencontainers.image.source="https://github.com/Efficient-X/Eufy-Home-Assistant"
+    org.opencontainers.image.source="https://github.com/Efficient-X/Eufy-NVR-Local"
 
 # The image includes third-party components; the project MIT licence alone
 # does not describe the licences of its dependencies.

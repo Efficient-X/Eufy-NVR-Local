@@ -45,7 +45,7 @@ There are two parts: an **app** that brings in the video, and an **integration**
 that gives Home Assistant camera items. Install both from the same source version.
 
 1. Open the Home Assistant app store. In its menu, choose **Repositories**, add
-   `https://github.com/Efficient-X/Eufy-Home-Assistant`, and install
+   `https://github.com/Efficient-X/Eufy-NVR-Local`, and install
    **Eufy NVR Local (experimental)**. This builds on your machine, so the first
    installation takes a few minutes. No EFX prebuilt container image is published.
 2. In HACS, add the same URL as a **custom repository**, category **Integration**.

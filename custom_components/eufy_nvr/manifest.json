@@ -2,8 +2,8 @@
   "domain": "eufy_nvr",
   "name": "Eufy NVR Local",
   "version": "0.8.0-alpha.1",
-  "documentation": "https://github.com/Efficient-X/Eufy-Home-Assistant",
-  "issue_tracker": "https://github.com/Efficient-X/Eufy-Home-Assistant/issues",
+  "documentation": "https://github.com/Efficient-X/Eufy-NVR-Local",
+  "issue_tracker": "https://github.com/Efficient-X/Eufy-NVR-Local/issues",
   "codeowners": [
     "@Efficient-X"
   ],

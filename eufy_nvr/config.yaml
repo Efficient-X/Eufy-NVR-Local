@@ -4,7 +4,7 @@ slug: eufy_nvr
 description: Live video from a eufy PoE NVR (S4 / T8N00), served as RTSP/WebRTC for
   Home Assistant. Eufy internet login and signalling are required; verify the selected
   media route.
-url: https://github.com/Efficient-X/Eufy-Home-Assistant
+url: https://github.com/Efficient-X/Eufy-NVR-Local
 arch:
 - aarch64
 - amd64

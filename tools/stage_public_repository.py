@@ -207,7 +207,7 @@ def stage(destination, *, root=ROOT):
         raise ValueError("Packaged frontend differs from source")
     config = guided.candidate_config(yaml.safe_load(files["eufy_nvr/config.yaml"]))
     config.update(name="Eufy NVR Local (experimental)", version=VERSION,
-                  url="https://github.com/Efficient-X/Eufy-Home-Assistant")
+                  url="https://github.com/Efficient-X/Eufy-NVR-Local")
     files["eufy_nvr/config.yaml"] = yaml.safe_dump(config,sort_keys=False).encode()
     component = json.loads(files["custom_components/eufy_nvr/manifest.json"])
     component["version"] = VERSION
