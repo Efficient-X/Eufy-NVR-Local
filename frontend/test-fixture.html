@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Shared camera tiles — synthetic test</title>
+<style>body{background:#15191d;color:white;font:16px system-ui;margin:24px;max-width:1050px}button{padding:10px;margin:4px}#fixture-state{padding:10px;background:#27333c}eufy-shared-tiles{display:block;margin-top:20px}ha-card{display:block}</style>
+<h1>Shared camera tiles — synthetic test</h1>
+<p>No Home Assistant or NVR connection. One mock video source supplies three coloured tiles.</p>
+<button id="hide">Hide card</button><button id="show">Show card</button><button id="remove">Remove card</button>
+<button id="freeze">Freeze source</button>
+<div id="fixture-state" role="status">Starting</div><div id="mount"></div>
+<script type="module">
+  import './eufy-shared-tiles.js';
+  const counts = { created: 0, active: 0, stopped: 0 };
+  let frozen = false;
+  function report(){document.querySelector('#fixture-state').textContent=`Players created: ${counts.created} | Active: ${counts.active} | Stopped: ${counts.stopped}`;}
+  class MockWebRtcPlayer extends HTMLElement {
+    constructor(){super();this.attachShadow({mode:'open'});counts.created++;}
+    connectedCallback(){
+      counts.active++;report();
+      this.video=document.createElement('video');this.video.muted=true;this.video.autoplay=true;this.video.playsInline=true;
+      this.shadowRoot.append(this.video);
+      this.canvas=document.createElement('canvas');this.canvas.width=1280;this.canvas.height=720;
+      const ctx=this.canvas.getContext('2d');let tick=0;
+      const draw=()=>{
+        if(frozen)return;
+        for(const [index,color] of ['#ff0000','#00ff00','#0000ff','#000000'].entries()){
+          const x=(index%2)*640,y=Math.floor(index/2)*360;
+          ctx.fillStyle=color;ctx.fillRect(x,y,640,360);
+          ctx.fillStyle='#fff';ctx.font='28px sans-serif';ctx.fillText(`Synthetic ${index+1} · ${tick}`,x+20,y+45);
+        } tick++;
+      };
+      draw();this._interval=setInterval(draw,100);
+      this.stream=this.canvas.captureStream(10);this.video.srcObject=this.stream;
+      this.video.play().catch(()=>{});
+    }
+    disconnectedCallback(){clearInterval(this._interval);this.video?.pause();this.stream?.getTracks().forEach(t=>t.stop());counts.active--;counts.stopped++;report();}
+  }
+  customElements.define('ha-web-rtc-player',MockWebRtcPlayer);
+  const card=document.createElement('eufy-shared-tiles');
+  card.setConfig({entity:'camera.synthetic',title:'One decoder, three separate views',tiles:[{index:0,name:'Red test view'},{index:1,name:'Green test view'},{index:2,name:'Blue test view'}]});
+  card.hass={states:{'camera.synthetic':{entity_id:'camera.synthetic',state:'idle'}}};
+  document.querySelector('#mount').append(card);
+  document.querySelector('#hide').onclick=()=>{card.style.display='none';};
+  document.querySelector('#show').onclick=()=>{card.style.display='block';};
+  document.querySelector('#remove').onclick=()=>{card.remove();};
+  document.querySelector('#freeze').onclick=()=>{frozen=true;};
+</script></html>

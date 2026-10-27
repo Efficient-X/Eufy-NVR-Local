@@ -1,0 +1,21 @@
+{
+  "domain": "eufy_nvr",
+  "name": "Eufy NVR Local",
+  "version": "0.8.0-alpha.1",
+  "documentation": "https://github.com/Efficient-X/Eufy-Home-Assistant",
+  "issue_tracker": "https://github.com/Efficient-X/Eufy-Home-Assistant/issues",
+  "codeowners": [
+    "@Efficient-X"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "ffmpeg",
+    "frontend"
+  ],
+  "after_dependencies": [
+    "hassio"
+  ],
+  "iot_class": "local_polling",
+  "integration_type": "hub",
+  "requirements": []
+}

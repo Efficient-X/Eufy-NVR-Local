@@ -1,0 +1,3 @@
+# Linux entry scripts must keep usable shebangs on Windows checkouts too.
+*.sh text eol=lf
+Dockerfile text eol=lf

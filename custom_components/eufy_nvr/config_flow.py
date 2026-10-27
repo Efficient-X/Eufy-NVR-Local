@@ -1,0 +1,382 @@
+"""Config flow for Eufy NVR (local).
+
+The user supplies only where go2rtc lives (host + ports). Cameras are discovered
+automatically afterwards by the coordinator — no channel names, no per-camera
+entry. The flow validates that go2rtc's REST API answers before creating the
+entry, so misconfiguration is caught immediately.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
+import voluptuous as vol
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
+
+from .app_connection import (
+    LocalVideoSetupRequired, create_installed_local_video,
+    installed_apps, installed_connection, same_endpoint,
+)
+
+from .const import (
+    CONF_API_PORT,
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_RTSP_PORT,
+    CONF_USERNAME,
+    DEFAULT_API_PORT,
+    DEFAULT_HOST,
+    DEFAULT_RTSP_PORT,
+    DEFAULT_USERNAME,
+    DOMAIN,
+    REQUEST_TIMEOUT,
+)
+from .go2rtc_api import (
+    Go2RtcClient,
+    Go2RtcError,
+    host_from_internal_url,
+    normalize_host,
+    validate_credentials,
+    validate_port,
+)
+
+
+async def _validate_go2rtc(
+    hass, host: str, api_port: int, username: str, password: str
+) -> tuple[str, int]:
+    """Probe go2rtc and return its normalized host and Eufy stream count.
+
+    Distinguishes bad input, an unreachable API, and a reachable bridge that has
+    not published any Eufy cameras yet so the setup form can be actionable.
+    """
+    session = async_get_clientsession(hass)
+    try:
+        normalized_host = normalize_host(host)
+        validate_port(api_port)
+        username, password = validate_credentials(username, password)
+    except ValueError as err:
+        raise InvalidEndpoint from err
+
+    candidates = [normalized_host]
+    if normalized_host == DEFAULT_HOST:
+        fallback = host_from_internal_url(hass.config.internal_url)
+        if fallback and fallback != normalized_host:
+            candidates.append(fallback)
+
+    last_error: Go2RtcError | None = None
+    response_error: Exception | None = None
+    for candidate in candidates:
+        client = Go2RtcClient(
+            session, candidate, api_port, REQUEST_TIMEOUT, username, password
+        )
+        try:
+            streams = await client.async_get_streams()
+        except Go2RtcError as err:
+            last_error = err
+            continue
+        if streams:
+            return client.host, len(streams)
+        # A default host may resolve to the wrong go2rtc. Still try the explicit
+        # internal-URL fallback rather than stopping at the first HTTP response.
+        response_error = WrongInstance() if client.total_stream_count else NoStreams()
+    if response_error is not None:
+        raise response_error
+    raise CannotConnect from last_error
+
+
+def _validate_rtsp_port(port: int) -> int:
+    try:
+        return validate_port(port)
+    except ValueError as err:
+        raise InvalidEndpoint from err
+
+
+def _schema(defaults: dict[str, Any]) -> vol.Schema:
+    """Build the form schema with the given defaults."""
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, DEFAULT_HOST)): str,
+            vol.Required(
+                CONF_API_PORT, default=defaults.get(CONF_API_PORT, DEFAULT_API_PORT)
+            ): vol.All(int, vol.Range(min=1, max=65535)),
+            vol.Required(
+                CONF_RTSP_PORT, default=defaults.get(CONF_RTSP_PORT, DEFAULT_RTSP_PORT)
+            ): vol.All(int, vol.Range(min=1, max=65535)),
+            vol.Required(
+                CONF_USERNAME, default=defaults.get(CONF_USERNAME, DEFAULT_USERNAME)
+            ): vol.All(str, vol.Length(min=1, max=64)),
+            vol.Required(CONF_PASSWORD): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+        }
+    )
+
+
+def _credentials_schema(defaults: Mapping[str, Any]) -> vol.Schema:
+    """Build the credential-only schema used by guided reauthentication."""
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_USERNAME, default=defaults.get(CONF_USERNAME, DEFAULT_USERNAME)
+            ): vol.All(str, vol.Length(min=1, max=64)),
+            vol.Required(CONF_PASSWORD): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+        }
+    )
+
+
+class EufyNvrConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle the config + reconfigure flow."""
+
+    VERSION = 1
+
+    def _endpoint_in_use(
+        self, host: str, port: int, *, exclude_entry_id: str | None = None
+    ) -> bool:
+        """Also recognise entries created before endpoint-ID repairs."""
+        for entry in self._async_current_entries():
+            if entry.entry_id == exclude_entry_id:
+                continue
+            try:
+                other_host = normalize_host(entry.data[CONF_HOST])
+                other_port = validate_port(entry.data[CONF_API_PORT])
+            except (KeyError, ValueError):
+                continue
+            if (other_host, other_port) == (host, port):
+                return True
+        return False
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer automatic local app connection or a standalone bridge."""
+        return self.async_show_menu(step_id="user", menu_options=["app", "manual"])
+
+    async def async_step_app(self, user_input=None) -> ConfigFlowResult:
+        """Connect a running installed app without copying passwords or ports."""
+        errors = {}
+        try:
+            apps = await installed_apps(self.hass)
+        except Exception:  # Supervisor failure, never expose exception credentials
+            apps = {}
+            errors["base"] = "app_unavailable"
+        if not apps:
+            return self.async_show_form(step_id="app", data_schema=vol.Schema({}),
+                                       errors={"base": "app_unavailable"})
+        if user_input is not None and user_input.get("app") in apps:
+            try:
+                data = await installed_connection(self.hass, user_input["app"])
+                host, _ = await _validate_go2rtc(self.hass, data[CONF_HOST],
+                    data[CONF_API_PORT], data[CONF_USERNAME], data[CONF_PASSWORD])
+                data[CONF_HOST] = host
+            except LocalVideoSetupRequired:
+                self._local_setup_slug = user_input["app"]
+                return await self.async_step_app_security()
+            except Exception:
+                errors["base"] = "app_not_ready"
+            else:
+                if self._endpoint_in_use(host, data[CONF_API_PORT]):
+                    return self.async_abort(reason="already_configured")
+                for entry in self._async_current_entries():
+                    if entry.data.get("app_slug") == user_input["app"]:
+                        return self.async_abort(reason="already_configured")
+                    if entry.data.get(CONF_API_PORT) == data[CONF_API_PORT]:
+                        try:
+                            other_host = normalize_host(entry.data[CONF_HOST])
+                        except (KeyError, ValueError):
+                            continue
+                        if await same_endpoint(host, other_host, data[CONF_API_PORT]):
+                            return self.async_abort(reason="already_configured")
+                data["app_slug"] = user_input["app"]
+                await self.async_set_unique_id(f"{host}:{data[CONF_API_PORT]}")
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title="Eufy NVR", data=data)
+        return self.async_show_form(step_id="app",
+            data_schema=vol.Schema({vol.Required("app"): vol.In(apps)}), errors=errors)
+
+    async def async_step_app_security(self, user_input=None) -> ConfigFlowResult:
+        """Ask before saving a new local password or restarting the new app."""
+        slug = getattr(self, "_local_setup_slug", None)
+        if not slug:
+            return await self.async_step_app()
+        errors = {}
+        if user_input is not None:
+            if user_input.get("confirm") is not True:
+                errors["base"] = "local_video_confirmation_required"
+            else:
+                try:
+                    await create_installed_local_video(self.hass, slug)
+                except Exception:
+                    errors["base"] = "local_video_setup_uncertain"
+                else:
+                    return await self.async_step_app_finish()
+        return self.async_show_form(step_id="app_security", errors=errors,
+            data_schema=vol.Schema({vol.Required("confirm", default=False): bool}))
+
+    async def async_step_app_finish(self, user_input=None) -> ConfigFlowResult:
+        """Pause while the person signs in through the new app's protected UI."""
+        slug = getattr(self, "_local_setup_slug", None)
+        if not slug:
+            return await self.async_step_app()
+        if user_input is not None:
+            return await self.async_step_app({"app": slug})
+        return self.async_show_form(step_id="app_finish", data_schema=vol.Schema({}))
+
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Initial setup step."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            host = user_input[CONF_HOST]
+            api_port = user_input[CONF_API_PORT]
+            rtsp_port = user_input[CONF_RTSP_PORT]
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+
+            try:
+                _validate_rtsp_port(rtsp_port)
+                host, _ = await _validate_go2rtc(
+                    self.hass, host, api_port, username, password
+                )
+            except InvalidEndpoint:
+                errors["base"] = "invalid_endpoint"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except WrongInstance:
+                errors["base"] = "wrong_instance"
+            except NoStreams:
+                errors["base"] = "no_streams"
+            else:
+                if self._endpoint_in_use(host, api_port):
+                    return self.async_abort(reason="already_configured")
+                await self.async_set_unique_id(f"{host}:{api_port}")
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=f"Eufy NVR ({host})",
+                    data={
+                        CONF_HOST: host,
+                        CONF_API_PORT: api_port,
+                        CONF_RTSP_PORT: rtsp_port,
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="manual",
+            data_schema=_schema(user_input or {}),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Allow editing host/ports of an existing entry."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            host = user_input[CONF_HOST]
+            api_port = user_input[CONF_API_PORT]
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+            try:
+                _validate_rtsp_port(user_input[CONF_RTSP_PORT])
+                host, _ = await _validate_go2rtc(
+                    self.hass, host, api_port, username, password
+                )
+            except InvalidEndpoint:
+                errors["base"] = "invalid_endpoint"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except WrongInstance:
+                errors["base"] = "wrong_instance"
+            except NoStreams:
+                errors["base"] = "no_streams"
+            else:
+                if self._endpoint_in_use(host, api_port, exclude_entry_id=entry.entry_id):
+                    return self.async_abort(reason="already_configured")
+                existing = await self.async_set_unique_id(f"{host}:{api_port}")
+                if existing is not None and existing.entry_id != entry.entry_id:
+                    return self.async_abort(reason="already_configured")
+                return self.async_update_reload_and_abort(
+                    entry,
+                    unique_id=f"{host}:{api_port}",
+                    title=f"Eufy NVR ({host})",
+                    data_updates={
+                        CONF_HOST: host,
+                        CONF_API_PORT: api_port,
+                        CONF_RTSP_PORT: user_input[CONF_RTSP_PORT],
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_schema(user_input or dict(entry.data)),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Request local credentials after an authentication setup failure."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Validate replacement credentials against the configured endpoint."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                await _validate_go2rtc(
+                    self.hass,
+                    entry.data[CONF_HOST],
+                    entry.data[CONF_API_PORT],
+                    user_input[CONF_USERNAME],
+                    user_input[CONF_PASSWORD],
+                )
+            except InvalidEndpoint:
+                errors["base"] = "invalid_endpoint"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except WrongInstance:
+                errors["base"] = "wrong_instance"
+            except NoStreams:
+                errors["base"] = "no_streams"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_USERNAME: user_input[CONF_USERNAME],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=_credentials_schema(user_input or entry.data),
+            errors=errors,
+        )
+
+
+class CannotConnect(Exception):
+    """Raised when go2rtc's REST API is unreachable."""
+
+
+class InvalidEndpoint(Exception):
+    """Raised when a host or port is invalid."""
+
+
+class NoStreams(Exception):
+    """Raised when go2rtc is reachable but has no Eufy streams."""
+
+
+class WrongInstance(Exception):
+    """Raised when the endpoint contains only non-Eufy streams."""

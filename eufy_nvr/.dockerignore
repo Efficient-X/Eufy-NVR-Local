@@ -1,0 +1,10 @@
+**/__pycache__
+**/*.pyc
+**/auth.json
+**/auth.local.json
+**/cameras.json
+**/go2rtc.yaml
+**/stream_names.json
+**/grid_layout.json
+**/_debug
+**/userdata

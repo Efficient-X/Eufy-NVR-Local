@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eufy NVR setup</title>
+<link rel="stylesheet" href="setup.css">
+<script type="module" src="setup.js"></script>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Eufy NVR Local · setup</p>
+  <h1>Connect your camera recorder</h1>
+  <p>Your NVR is the box your cameras plug into. This setup connects that box to Home Assistant.</p>
+  <aside><strong>Development build</strong> — this setup screen is not yet enabled in the installed app.
+    In the guided version, saving a recorder starts its camera service. It does not change recordings.</aside>
+  <section class="notice">
+    <h2>Before you start</h2>
+    <p>Use the Eufy account that owns the recorder, not a shared guest account. The owner has permission to open its camera feeds.</p>
+    <p>This is not a fully offline connection. Signing in and arranging the connection still need Eufy's internet service.
+       The app is designed to receive the video over your home network.</p>
+    <p>Your Eufy password is different from the app's local video password. This screen does not change either password.</p>
+    <p>For a new guided app, the Home Assistant integration can create the local video password for you after you confirm.
+       You do not need to copy or remember it. That password protects camera video inside your home;
+       it is not sent to Eufy and does not change your Eufy account password.</p>
+  </section>
+  <p id="status" role="status" aria-live="polite">Opening a protected setup session…</p>
+  <p id="error" role="alert" hidden></p>
+  <section id="service" class="notice" hidden>
+    <h2>Camera service</h2>
+    <p id="service-status"></p>
+    <p class="help">A running service means the video software has started. Open a camera tile to check the actual picture.
+      This screen does not change recording settings or restart Home Assistant.</p>
+    <button id="retry-service" type="button" class="secondary" hidden>Try the connection again</button>
+    <p id="remembered-status" class="help" hidden></p>
+    <button id="forget-sign-in" type="button" class="secondary" hidden>Forget saved sign-in</button>
+  </section>
+  <form id="credentials" hidden>
+    <h2>1. Sign in to Eufy</h2>
+    <label for="email">Eufy email address</label>
+    <input id="email" type="email" required maxlength="320" autocomplete="username" aria-describedby="email-help">
+    <p id="email-help" class="help">Use the same email you use in the Eufy phone app. This tells Eufy which account owns your recorder.</p>
+    <label for="password">Eufy password</label>
+    <input id="password" type="password" required maxlength="1024" autocomplete="current-password" aria-describedby="password-help">
+    <p id="password-help" class="help">This proves the account is yours. Normally the setup clears your password after signing in
+      and saves a temporary access token instead.</p>
+    <label><input id="remember" type="checkbox" aria-describedby="remember-help"> Remember my Eufy sign-in</label>
+    <p id="remember-help" class="help">Optional and off by default. When you tick this and save your recorder, the app keeps your
+      email and password in its private data so it can sign in again if Eufy rejects the saved access token.
+      The app does not encrypt this saved password; someone who can read the app's private files or backups could read it.
+      Protect your backups. A picture check, email code or failed renewal still needs your help.
+      Forget saved sign-in removes it from the current app data, not from older backups, and does not change your Eufy password.</p>
+    <label for="country">Account country</label>
+    <select id="country" required aria-describedby="country-help">
+      <option value="">Choose your account country</option>
+      <option value="AU">Australia</option><option value="AT">Austria</option><option value="BE">Belgium</option>
+      <option value="CA">Canada</option><option value="DK">Denmark</option><option value="FI">Finland</option>
+      <option value="FR">France</option><option value="DE">Germany</option><option value="IE">Ireland</option>
+      <option value="IT">Italy</option><option value="JP">Japan</option><option value="NL">Netherlands</option>
+      <option value="NZ">New Zealand</option><option value="NO">Norway</option><option value="PL">Poland</option>
+      <option value="PT">Portugal</option><option value="SG">Singapore</option><option value="ES">Spain</option>
+      <option value="SE">Sweden</option><option value="CH">Switzerland</option>
+      <option value="GB">United Kingdom</option><option value="US">United States</option>
+    </select>
+    <p id="country-help" class="help">Choose where your Eufy account is registered, not where you are travelling today.
+      For an Australian account, choose Australia. If your country is missing, stop and ask for support; do not choose a different country.</p>
+    <details>
+      <summary>Server group — an advanced setting</summary>
+      <label for="region">Eufy login server</label>
+      <select id="region" aria-describedby="region-help">
+        <option value="US">US server group</option><option value="EU">EU server group</option><option value="IE">IE server group</option>
+      </select>
+      <p id="region-help" class="help">This selects the Eufy service we ask to sign you in. It does not change your account country.
+        The Australian installation tested for this project uses US. Keep your known working setting.
+        If you do not know it and sign-in fails, ask for help instead of trying every group repeatedly.</p>
+    </details>
+    <button type="submit" data-action>Sign in</button>
+  </form>
+  <form id="captcha" hidden>
+    <h2>2. Read the picture</h2>
+    <p>Eufy wants to check that a person is signing in. Type the letters or numbers shown below. This does not change your password.</p>
+    <img id="captcha-image" alt="Eufy picture challenge. Read the letters or numbers and enter them below.">
+    <label for="answer">Letters or numbers in the picture</label>
+    <input id="answer" maxlength="128" required autocomplete="off" spellcheck="false">
+    <button type="submit" data-action>Check answer</button>
+  </form>
+  <form id="email-code" hidden>
+    <h2>2. Check your email</h2>
+    <p>Eufy needs another check before allowing this sign-in. Look for its six-digit email code, including in your junk folder.
+      Enter it here to prove you can access the account's email.</p>
+    <label for="code">Six-digit code</label>
+    <input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code">
+    <p class="help">Do not post the code in screenshots or messages. If it never arrives, cancel and ask for help.
+      Repeated sign-in attempts can temporarily lock the account.</p>
+    <button type="submit" data-action>Check code</button>
+  </form>
+  <form id="recorder" hidden>
+    <h2>3. Choose your recorder</h2>
+    <p>This chooses which recorder Home Assistant will connect to. It does not erase recordings, move cameras or reset the recorder.
+      Saving replaces this app's saved account connection.</p>
+    <label for="selection">Your recorder</label>
+    <select id="selection" required></select>
+    <p class="help">Only supported T8N00 recorders appear. If two have the same name, give them different names in the Eufy app first,
+      then cancel and start again. Do not guess.</p>
+    <button type="submit" data-action>Save this recorder</button>
+  </form>
+  <section id="complete" hidden>
+    <h2>Account connection saved</h2>
+    <p>The app now has permission details for your chosen recorder. That is not yet proof that video works.</p>
+    <p>If a camera-service status appears above, follow that message, then open a camera tile to check the picture.
+      No recording settings were changed.</p>
+  </section>
+  <div class="actions">
+    <button id="check" type="button" class="secondary" hidden>Check progress</button>
+    <button id="cancel" type="button" class="secondary" disabled>Cancel setup</button>
+    <button id="reopen" type="button" class="secondary" hidden>Open setup again</button>
+  </div>
+  <p class="help">Setup closes after 10 minutes to avoid leaving account details waiting in memory. Cancel clears the unfinished setup;
+    it does not delete a previously saved connection.</p>
+  <noscript>This setup needs JavaScript to send your details safely. Enable it for your Home Assistant page, then reload.</noscript>
+</main>
+</body>
+</html>
+

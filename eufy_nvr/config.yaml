@@ -1,0 +1,58 @@
+name: Eufy NVR Local (experimental)
+version: 0.8.0-alpha.1
+slug: eufy_nvr
+description: Live video from a eufy PoE NVR (S4 / T8N00), served as RTSP/WebRTC for
+  Home Assistant. Eufy internet login and signalling are required; verify the selected
+  media route.
+url: https://github.com/Efficient-X/Eufy-Home-Assistant
+arch:
+- aarch64
+- amd64
+init: false
+startup: application
+boot: manual
+host_network: true
+ingress: true
+panel_icon: mdi:cctv
+ports:
+  8556/tcp: 8556
+  1985/tcp: 1985
+  8557/tcp: 8557
+  8557/udp: 8557
+ports_description:
+  8556/tcp: RTSP (HA pulls cameras from rtsp://<HA-LAN-IP>:8556/eufy_<name>)
+  1985/tcp: Authenticated local video API
+  8557/tcp: WebRTC (TCP candidate)
+  8557/udp: WebRTC (UDP candidate)
+options:
+  signaling_mode: call
+  signaling_identity: nvr_admin
+  log_level: info
+  keep_warm: false
+  adaptive_warm_seconds: 30
+  video_copy: true
+  shared_grid: true
+  grid_lens: both
+  disabled_channels: ''
+  go2rtc_username: eufy
+  go2rtc_password: ''
+  setup_mode: guided
+schema:
+  signaling_mode: list(call|scall)?
+  signaling_identity: list(nvr_admin|web_empty)?
+  rtsp_port: int(1024,65535)?
+  log_level: list(trace|debug|info|notice|warning|error|fatal)?
+  keep_warm: bool?
+  adaptive_warm_seconds: int(0,600)?
+  video_copy: bool?
+  shared_grid: bool?
+  grid_lens: list(fixed|movable|both)?
+  grid_columns: int(0,4)?
+  disabled_channels: str?
+  go2rtc_username: str
+  go2rtc_password: password
+  setup_mode: list(guided)
+ingress_port: 0
+panel_admin: true
+homeassistant_api: true
+timeout: 60

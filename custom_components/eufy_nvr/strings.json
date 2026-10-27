@@ -1,0 +1,93 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Eufy NVR",
+        "description": "Use your installed Home Assistant app, or connect a standalone bridge.",
+        "menu_options": {"app": "Connect installed Eufy NVR app", "manual": "Enter connection details manually"}
+      },
+      "app": {
+        "title": "Connect installed app",
+        "description": "Select the running Eufy NVR Local app. Home Assistant reads its local connection settings; no password or port copying is needed. A new guided app without a local video password offers a separate confirmation before creating one. Existing passwords are left alone.",
+        "data": {"app": "Eufy NVR app"}
+      },
+      "app_security": {
+        "title": "Protect local camera video",
+        "description": "This new guided app has no local video password yet. Confirm below to create a strong random password and restart only this Eufy NVR app so it can use the password. Home Assistant will read the password itself; you do not need to copy or remember it. This does not change your Eufy account password, camera recordings or Home Assistant settings. Do not edit the app Configuration at the same time. Existing passwords are never replaced by this step.",
+        "data": {"confirm": "Create the local video password and restart this new app"}
+      },
+      "app_finish": {
+        "title": "Finish signing in to Eufy",
+        "description": "The local video password is configured. Keep this setup open. In another Home Assistant tab, open the Eufy NVR app and choose Open Web UI. Complete Eufy sign-in and select your recorder. Once it says the camera service is running, return here and select Submit to connect the cameras. If the app has not loaded its new settings, restart only that app once. Do not restart Home Assistant or delete any saved credentials."
+      },
+      "manual": {
+        "title": "Eufy NVR Local",
+        "description": "Point this at the go2rtc instance run by the Eufy NVR add-on or bridge. Use the same local username and password configured in the add-on. Cameras are discovered automatically from its eufy_* streams.",
+        "data": {
+          "host": "go2rtc host (IP)",
+          "api_port": "go2rtc API port",
+          "rtsp_port": "RTSP port",
+          "username": "Local go2rtc username",
+          "password": "Local go2rtc password"
+        },
+        "data_description": {
+          "host": "IP or hostname of the machine running the bridge/add-on. For the add-on, use the Home Assistant host's LAN address.",
+          "api_port": "Dedicated Eufy go2rtc API / web UI port (default 1985), used to auto-discover cameras.",
+          "rtsp_port": "Dedicated Eufy go2rtc RTSP port (default 8556), used to stream each camera.",
+          "username": "Must match go2rtc_username in the Eufy NVR add-on.",
+          "password": "Must match go2rtc_password in the Eufy NVR add-on (minimum 16 characters)."
+        }
+      },
+      "reconfigure": {
+        "title": "Eufy NVR Local",
+        "description": "Update where go2rtc is reachable. Cameras re-discover automatically after saving.",
+        "data": {
+          "host": "go2rtc host (IP)",
+          "api_port": "go2rtc API port",
+          "rtsp_port": "RTSP port",
+          "username": "Local go2rtc username",
+          "password": "Local go2rtc password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Authenticate Eufy NVR",
+        "description": "Enter the local go2rtc credentials configured in the Eufy NVR add-on or bridge. Existing entries need these credentials after upgrading to v0.7.2.",
+        "data": {
+          "username": "Local go2rtc username",
+          "password": "Local go2rtc password"
+        },
+        "data_description": {
+          "username": "Must match go2rtc_username in the Eufy NVR add-on.",
+          "password": "Must match go2rtc_password in the Eufy NVR add-on (minimum 16 characters)."
+        }
+      }
+    },
+    "error": {
+      "local_video_confirmation_required": "Tick the confirmation only if you want to create the first local video password and restart this app.",
+      "local_video_setup_uncertain": "Setup could not confirm every step. A password may already have been saved. Do not clear it or keep generating passwords. Check this app's Configuration, restart only this app if necessary, then reopen its Web UI. Existing configured connections and nonempty passwords are not replaced.",
+      "app_unavailable": "No running Eufy NVR Local app was found. Install and configure the app, start it, then retry. Standalone installations can use manual connection.",
+      "app_not_ready": "The app is not ready to connect. Check that Eufy sign-in and camera discovery have completed, and that its local stream credentials are configured.",
+      "cannot_connect": "Could not reach go2rtc at that host/port. Check that the Eufy NVR add-on or bridge is running and the go2rtc API port is correct.",
+      "invalid_endpoint": "Enter a valid hostname or IP address, with API and RTSP ports in their separate fields.",
+      "wrong_instance": "That address is another go2rtc instance containing non-Eufy streams—usually Home Assistant's built-in server on port 1984. Use the Eufy add-on API port 1985.",
+      "no_streams": "go2rtc is reachable, but it has not published any eufy_* cameras. Finish add-on discovery or check its log, then try again."
+    },
+    "abort": {
+      "already_configured": "This go2rtc endpoint is already configured.",
+      "reconfigure_successful": "Eufy NVR was reconfigured successfully.",
+      "reauth_successful": "Eufy NVR credentials were updated successfully."
+    }
+  },
+  "entity": {
+    "camera": {
+      "eufy_nvr": {
+        "state_attributes": {
+          "stream_name": { "name": "Stream name" },
+          "producers": { "name": "Producers" },
+          "consumers": { "name": "Consumers" },
+          "streaming": { "name": "Streaming" }
+        }
+      }
+    }
+  }
+}

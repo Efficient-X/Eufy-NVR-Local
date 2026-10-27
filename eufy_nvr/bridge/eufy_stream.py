@@ -1,0 +1,958 @@
+#!/usr/bin/env python3
+"""Live WebRTC-to-video pipeline for the Eufy S4 NVR (T8N00).
+
+A local Node JSON-lines adapter uses the Apache-2.0 SDK-derived native PTCS
+framer (ptcs_transport.js). It sends XZYH control commands and returns complete
+frames; this module handles channel discovery, video routing and media output.
+The former vendor framing WASM is no longer a runtime dependency.
+
+Private authentication state is loaded from the configured data directory.
+"""
+import asyncio, json, time, uuid, os, sys, hashlib, hmac, re, base64, struct, ipaddress
+
+import aiohttp
+import websockets
+import eufy_cloud as ec
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer
+from aiortc.sdp import candidate_from_sdp
+import logging
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
+# aiortc only offers ECDHE-ECDSA; the NVR presents an RSA cert. Broaden ciphers (incl. ECDHE-RSA).
+from aiortc.rtcdtlstransport import RTCCertificate as _RTCCert
+_orig_ssl_ctx = _RTCCert._create_ssl_context
+def _broad_ssl_ctx(self, srtp_profiles):
+    ctx = _orig_ssl_ctx(self, srtp_profiles)
+    ctx.set_cipher_list(
+        b"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+        b"ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+        b"ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+        b"ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:"
+        b"ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:"
+        b"AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA:AES256-SHA"
+    )
+    return ctx
+_RTCCert._create_ssl_context = _broad_ssl_ctx
+
+# The eufy NVR's DTLS certificate has a signatureAlgorithm field whose encoding
+# Python 'cryptography' (rust-asn1) rejects with "ExtraData in
+# TbsCertificate::signature_alg", even though OpenSSL accepts it and the DTLS
+# handshake completes. aiortc's peer-identity check reaches for the certificate
+# via get_peer_certificate(as_cryptography=True), which triggers that strict
+# parse and fails the connection right after ICE completes. Reimplement the same
+# check the RFC 4572 way -- hash the exact DER OpenSSL negotiated and compare it
+# to the remote SDP fingerprint -- so verification no longer depends on the
+# strict ASN.1 parser. Security is unchanged: a non-matching fingerprint still
+# fails the handshake.
+import hashlib as _hashlib
+from OpenSSL import crypto as _ossl_crypto
+from aiortc import rtcdtlstransport as _dtls_mod
+
+# Same algorithm set aiortc allows (RFC 8122): SHA-1 is deprecated and NOT accepted.
+_PEER_DIGESTS = {"sha-256": _hashlib.sha256, "sha-384": _hashlib.sha384,
+                 "sha-512": _hashlib.sha512}
+
+def _validate_peer_identity_via_der(self, remoteParameters):
+    # Relies on OpenSSL re-encoding the peer cert to the same DER the SDP
+    # fingerprint was computed over (true for this NVR's cert). Same accept/reject
+    # semantics as aiortc: every supported fingerprint must match, and there must
+    # be at least one. Fails CLOSED on peer=None, empty/unknown-only fingerprints,
+    # any mismatch, or any exception.
+    try:
+        peer = self._ssl.get_peer_certificate()  # OpenSSL X509, without strict ASN.1 parsing
+        if peer is None:
+            raise ValueError("peer certificate is missing")
+        der = _ossl_crypto.dump_certificate(_ossl_crypto.FILETYPE_ASN1, peer)
+        supported = valid = 0
+        for f in remoteParameters.fingerprints:
+            fn = _PEER_DIGESTS.get(f.algorithm.lower())
+            if fn is None:
+                continue
+            supported += 1
+            hx = fn(der).hexdigest().upper()
+            digest = ":".join(hx[i:i + 2] for i in range(0, len(hx), 2))
+            if f.value.upper() == digest:
+                valid += 1
+    except Exception:
+        self._set_state(_dtls_mod.State.FAILED)
+        print(f"[{time.strftime('%H:%M:%S')}] DTLS handshake failed (peer certificate unavailable)",
+              flush=True, file=sys.stderr)
+        return
+    if not supported or valid != supported:
+        self._set_state(_dtls_mod.State.FAILED)  # fail closed first, then diagnose
+        print(f"[{time.strftime('%H:%M:%S')}] DTLS handshake failed (fingerprint mismatch)",
+              flush=True, file=sys.stderr)
+        return
+
+# Fail loudly if this aiortc build lacks the private method we override, so a
+# version bump can't silently fall back to the cryptography parser (which chokes on
+# this NVR's cert). Patch is process-wide; the bridge only speaks DTLS to the NVR.
+assert hasattr(_dtls_mod.RTCDtlsTransport, "_validate_peer_identity"), (
+    "aiortc RTCDtlsTransport._validate_peer_identity is missing; pin a compatible aiortc"
+)
+_dtls_mod.RTCDtlsTransport._validate_peer_identity = _validate_peer_identity_via_der
+
+ROOT = os.path.dirname(os.path.abspath(__file__))   # the bridge/ directory
+
+def _lan_ipv4(ip):
+    """True for a private (RFC 1918) IPv4 the NVR advertises as its LAN host ICE
+    candidate. Works on ANY home subnet -- 10.x, 172.16-31.x, 192.168.x -- so a
+    user is not tied to one hardcoded network."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return addr.version == 4 and addr.is_private and not addr.is_loopback and not addr.is_link_local
+
+def _bin(name):
+    exe = name + (".exe" if os.name == "nt" else "")
+    local = os.path.join(ROOT, "bin", exe)
+    return os.environ.get(name.upper(), local if os.path.exists(local) else name)
+
+AUTH = json.load(open(os.environ.get("EUFY_AUTH", os.path.join(ROOT, "auth.json"))))
+STATION_SN = os.environ.get("EUFY_STATION_SN") or AUTH.get("stationSn") or ""
+REGION = os.environ.get("EUFY_REGION") or AUTH.get("region") or "US"
+
+def _decrypt_user_id():
+    if AUTH.get("userId"):
+        return AUTH["userId"]
+    auid = AUTH.get("auid")
+    if not auid:
+        raise SystemExit("auth.json has no 'userId' or 'auid' — re-run get_auth.js")
+    from Crypto.Cipher import AES
+    blob = base64.b64decode(base64.b64decode(auid).decode("utf-8"))
+    salt, ct = blob[8:16], blob[16:]
+    d = b""; prev = b""
+    while len(d) < 48:
+        prev = hashlib.md5(prev + b"aes" + salt).digest(); d += prev
+    pt = AES.new(d[:32], AES.MODE_CBC, d[32:48]).decrypt(ct)
+    return json.loads(pt[:-pt[-1]])
+USER_ID = _decrypt_user_id()
+
+def select_signaling_identity(auth, passport_user_id, mode):
+    """Select an explicit diagnostic proof mode without changing command auth.
+
+    The current official web client hashes sessionStorage.admin_user_id or an
+    empty string. Its station-selection path instead writes admin_user_id into
+    encrypted localStorage.auid. web_empty tests that documented empty fallback;
+    it does not remove the authenticated WebSocket token or command identity.
+    """
+    if mode == "web_empty":
+        return "", "web_empty"
+    if mode != "nvr_admin":
+        raise ValueError("signaling_identity must be nvr_admin or web_empty")
+    return (auth.get("signalingUserId") or passport_user_id,
+            auth.get("signalingIdentitySource") or "legacy_passport")
+
+SIGNALING_USER_ID, SIGNALING_IDENTITY_SOURCE = select_signaling_identity(
+    AUTH, USER_ID, os.environ.get("EUFY_SIGNALING_IDENTITY", "nvr_admin")
+)
+DISCOVER = "--discover" in sys.argv   # connect, run cmd 9100 -> list NVR ip + cameras (ch,name), write cameras.json, exit
+MULTICHANNEL_PROBE = "--multichannel-probe" in sys.argv
+GRID_2X2 = "--grid-2x2" in sys.argv
+_carg = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "0"
+from live_layout import discovered_channels
+CHANNELS = discovered_channels(
+    os.environ.get("EUFY_CAMERAS", os.path.join(ROOT, "cameras.json")),
+    os.environ.get("EUFY_DISABLED_CHANNELS", ""),
+) if _carg == "all" else [int(x) for x in _carg.split(",")]
+
+# Keep action3/control signaling anchored to the NVR primary channel (0).
+# Requested camera selection remains in CHANNELS/openLive/startStream.
+SIGNALING_CHANNEL = 0
+CALL_TYPE = os.environ.get("EUFY_CALL_TYPE", "call").strip().lower()
+if CALL_TYPE not in ("call", "scall"):
+    raise SystemExit("EUFY_CALL_TYPE must be 'call' or 'scall'")
+# --rtsp <url>: publish the H.265 stream to that RTSP url via ffmpeg (go2rtc exec {output} mode).
+RTSP_URL = None
+if "--rtsp" in sys.argv:
+    RTSP_URL = sys.argv[sys.argv.index("--rtsp") + 1]
+if MULTICHANNEL_PROBE and RTSP_URL:
+    raise SystemExit("Multi-channel metadata probe cannot publish media")
+STREAM_MODE = bool(RTSP_URL) or os.environ.get("EUFY_STDOUT") == "1"   # run indefinitely, no frame-count stop
+_rest = [a for a in sys.argv[2:] if a not in ("--rtsp", RTSP_URL)]
+RUN_SECS = int(_rest[0]) if _rest and _rest[0].isdigit() else (10**9 if STREAM_MODE else 70)
+NODE = _bin("node")
+ORACLE = os.path.join(ROOT, "sctp_oracle.js")
+FFMPEG = _bin("ffmpeg")
+
+WS_URL, SIGN_URL = ec.smart_urls(STATION_SN, REGION)
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+HEADERS = {
+    "x-auth-token": AUTH["authToken"], "gtoken": AUTH["gtoken"],
+    "app-name": AUTH.get("appName", "eufy_mega"), "model-type": "WEB",
+    "web-country": AUTH.get("webCountry", "US"),
+    "accept": "application/json, text/plain, */*", "user-agent": UA,
+    "origin": "https://security.eufy.com", "referer": "https://security.eufy.com/",
+}
+VIDEO_DUMP = os.path.join(ROOT, "_debug", "video_dump.bin")
+FRAMES_LOG = os.path.join(ROOT, "_debug", "frames.jsonl")
+CAPTURE_DEBUG = os.environ.get("EUFY_CAPTURE_DEBUG") == "1" and not MULTICHANNEL_PROBE
+# Discovery manifest. Like EUFY_AUTH, the add-on points this at /data so the
+# discovered camera list survives a container restart/rebuild and gen_go2rtc.py
+# reads it from the exact same place; default to the bridge dir for standalone runs.
+CAMERAS_JSON = os.environ.get("EUFY_CAMERAS", os.path.join(ROOT, "cameras.json"))
+
+STDOUT_MODE = os.environ.get("EUFY_STDOUT") == "1" and not MULTICHANNEL_PROBE
+def now(): return int(time.time())
+def signaling_account(channel, user_id, timestamp):
+    """Return the account proof used by the current official NVR web client."""
+    return hashlib.md5(f"{channel}{user_id}{timestamp}".encode()).hexdigest()
+def log(*a): print(f"[{time.strftime('%H:%M:%S')}]", *a, flush=True, file=sys.stderr)
+
+def build_openlive(user_id, channels):
+    payload = json.dumps({
+        "account_id": user_id, "cmd": 1103,
+        "payload": {"channel_info": {"array_size": len(channels), "channel_array": channels}},
+    }, separators=(",", ":")).encode()
+    h = bytearray(16)
+    h[0:4] = b"XZYH"
+    struct.pack_into("<H", h, 4, 1350)          # command_id
+    struct.pack_into("<I", h, 6, len(payload))  # param_len
+    h[10] = 0; h[11] = 0                          # segmen
+    h[12] = 255; h[13] = 0                        # channel_id, sign_code
+    h[14] = 0; h[15] = 2                          # is_response, dev_type (cloud=2)
+    return bytes(h) + payload
+
+def build_startstream(user_id, channels, stream_id=1, grid=False):
+    from live_layout import layout_options, shared_lens_entries, runtime_layout_args, selected_sensors
+    # cmd 1003 (ic / startStream) — the ACTUAL live-video trigger (cmd 1103 is only a param query).
+    lens = os.environ.get("EUFY_GRID_LENS", "movable") if grid else "movable"
+    layout_args = runtime_layout_args(os.environ, channels)
+    sensors = selected_sensors(channels, lens, layout_args["counts"])
+    chn_list = shared_lens_entries(channels, lens, **layout_args) if grid else [
+        {"index": i, "chn": c, "sensor": sensors[c][0]} for i, c in enumerate(channels)]
+    # Match the current official split-lens live command only for opt-in both
+    # mode. Keep the hardware-verified fixed/movable request unchanged.
+    split_options = {"entrytype": 0, "msg_id": 116,
+                     "pip_cord": {"x1": 0, "y1": 0, "x2": 0, "y2": 0},
+                     "station_video_type": 6, "play_id": stream_id} if grid and lens == "both" else {}
+    payload = json.dumps({
+        "account_id": user_id, "cmd": 1003,
+        "payload": {"ClientOS": "WEB", "entrytype": 1, "camera_type": 0, "streamtype": 2,
+                    "key": "", "msg_id": "", "audio_chn": -1,
+                    **layout_options(channels, grid, lens, **layout_args), "chn_list": chn_list,
+                    **split_options},
+    }, separators=(",", ":")).encode()
+    h = bytearray(16)
+    h[0:4] = b"XZYH"
+    struct.pack_into("<H", h, 4, 1350)
+    struct.pack_into("<I", h, 6, len(payload))
+    h[10] = 0; h[11] = 0
+    h[12] = 255; h[13] = 0
+    h[14] = stream_id & 0xFF                      # isResponse byte carries streamId (per pr cloud branch)
+    h[15] = 2
+    return bytes(h) + payload
+
+def build_cmd(user_id, cmd, payload=None, channel_id=255):
+    body = json.dumps({"account_id": user_id, "cmd": cmd, "payload": payload or {}}, separators=(",", ":")).encode()
+    h = bytearray(16); h[0:4] = b"XZYH"
+    struct.pack_into("<H", h, 4, 1350)
+    struct.pack_into("<I", h, 6, len(body))
+    h[12] = channel_id & 0xFF; h[15] = 2
+    return bytes(h) + body
+
+def build_devicelist(user_id):
+    return build_cmd(user_id, 9100, {})   # response payload.dev_list = [{ch,sn,name,status,...}] (auto-discovery)
+
+def build_ping():
+    # heartbeat: 20-byte struct + 16-byte XZYH(1139), sent RAW (type Ir=99), per the web client.
+    s = bytearray(20)
+    s[0] = 0x00; s[1] = 0x09
+    struct.pack_into("<H", s, 4, 16)   # header byteLength = 16
+    s[12] = 99                          # Ir (WrtcLinkTypeInner)
+    hdr = bytearray(16)
+    hdr[0:4] = b"XZYH"
+    struct.pack_into("<H", hdr, 4, 1139)
+    hdr[15] = 2
+    return bytes(s) + bytes(hdr)
+
+async def get_sign_token():
+    async with aiohttp.ClientSession() as s:
+        async with s.get(SIGN_URL, headers=HEADERS) as r:
+            try:
+                body = await r.json(content_type=None)
+            except (aiohttp.ContentTypeError, json.JSONDecodeError) as exc:
+                log("ws/sign status", r.status, "returned a non-JSON response")
+                raise RuntimeError("ws/sign returned an invalid response") from exc
+
+            code = body.get("code") if isinstance(body, dict) else None
+            log("ws/sign status", r.status, "code", code)
+            sign_token = body.get("data") if isinstance(body, dict) else None
+            if r.status != 200 or not isinstance(sign_token, str) or not sign_token:
+                raise RuntimeError(
+                    "ws/sign rejected the current auth session; refresh auth.json or restart the add-on"
+                )
+            return sign_token
+
+def colonize(fp): return ":".join(fp[i:i+2] for i in range(0, len(fp), 2))
+
+def build_offer_sdp(ice, setup):
+    return ("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+        "a=group:BUNDLE 2\r\na=msid-semantic: WMS\r\n"
+        "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n"
+        "c=IN IP4 127.0.0.1\r\na=mid:2\r\na=ice-options:trickle\r\n"
+        f"a=ice-ufrag:{ice['ufrag']}\r\na=ice-pwd:{ice['pwd']}\r\n"
+        f"a=fingerprint:sha-256 {colonize(ice['fingerprint'])}\r\n"
+        f"a=setup:{setup}\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n")
+
+def extract_local_ice(sdp):
+    ufrag = re.search(r"a=ice-ufrag:(\S+)", sdp).group(1)
+    pwd = re.search(r"a=ice-pwd:(\S+)", sdp).group(1)
+    fp = re.search(r"a=fingerprint:sha-256 (\S+)", sdp).group(1).replace(":", "")
+    cands = re.findall(r"a=(candidate:\S[^\r\n]*)", sdp)
+    return ufrag, pwd, fp, cands
+
+class Signal:
+    def __init__(self, ws, sid, auth_token, user_id, channel, call_type):
+        self.ws = ws; self.sid = sid; self.auth_token = auth_token
+        self.user_id = user_id; self.channel = channel; self.call_type = call_type
+    async def send(self, inner, *, join=False):
+        msgid = "0" if join else f"{self.auth_token}_{uuid.uuid4()}"
+        await self.ws.send(json.dumps({"msgid": msgid, "data": json.dumps(inner)}))
+    async def join(self):
+        await self.send({"code": 200, "action": 1, "data": self.sid, "sn": STATION_SN, "source": "WEB", "ts": now()}, join=True)
+    async def action3(self, dt, obj):
+        timestamp = now()
+        data = {
+            "timestamp": timestamp,
+            "account": signaling_account(self.channel, self.user_id, timestamp),
+            **obj,
+        }
+        await self.send({"code": 200, "action": 3, "sessionId": self.sid, "sn": STATION_SN, "subSn": "",
+                         "channelId": self.channel, "isResponse": 0, "dataType": dt, "source": "WEB", "ts": timestamp,
+                         "data": json.dumps(data)})
+    async def call(self): await self.action3(self.call_type, {})
+    async def ack(self): await self.action3("ack", {})
+    async def send_sdp(self, native_sdp, uf, pw, fp, setup="active"):
+        if self.call_type == "scall":
+            compact = {"ice": {"ufrag": uf, "pwd": pw, "fingerprint": fp.upper(),
+                               "fingerprint_type": "sha-256"}, "setup": setup}
+            value = json.dumps(compact)
+        else:
+            value = native_sdp
+        await self.action3("info", {"sdp": value})
+    async def send_candidate(self, c):
+        await self.action3("info", {"candidate": c})
+
+def parse_msg(raw):
+    if isinstance(raw, (bytes, bytearray)): raw = raw.decode("utf-8", "replace")
+    outer = json.loads(raw); inner = outer.get("data")
+    if isinstance(inner, str):
+        try: inner = json.loads(inner)
+        except Exception: pass
+    d = inner.get("data") if isinstance(inner, dict) else None
+    if isinstance(d, str):
+        try: d = json.loads(d)
+        except Exception: pass
+    return inner, d
+
+
+def safe_signal_shape(inner, data):
+    """Return protocol structure only; never log payload values or identifiers."""
+    if not isinstance(inner, dict):
+        return "inner=non_object"
+    action = inner.get("action")
+    action_label = str(action) if action in (1, 2, 3, 4) else "other"
+    data_type = inner.get("dataType")
+    if data_type not in ("call", "scall", "ack", "info", "hangup"):
+        data_type = "none" if data_type is None else "other"
+    response = inner.get("isResponse")
+    response_label = str(response) if response in (0, 1) else "none"
+    known_data_keys = {"status", "turn", "format", "value", "timestamp", "account"}
+    present = sorted(k for k in known_data_keys if isinstance(data, dict) and k in data)
+    unknown_count = len(data) - len(present) if isinstance(data, dict) else 0
+    return (
+        f"action={action_label} data_type={data_type} is_response={response_label} "
+        f"data_keys={','.join(present) or 'none'} unknown_data_keys={unknown_count}"
+    )
+
+
+class Oracle:
+    """Bridge to the local Node native-PTCS adapter."""
+    def __init__(self):
+        self.proc = None; self.ready = asyncio.Event()
+        self.on_tx = None      # callback(bytes) -> send PTCS packet on WebrtcDataChannel
+        self.on_frame = None   # callback(link:int, bytes) -> reassembled frame
+        self.on_control_status = None  # callback(status:int) for fixed replies
+
+    async def start(self):
+        # limit must hold a whole base64'd video frame on one stdout line (1080p keyframes can be >100KB).
+        self.proc = await asyncio.create_subprocess_exec(
+            NODE, ORACLE, "serve",
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            limit=64 * 1024 * 1024)
+        asyncio.ensure_future(self._read_stdout())
+        asyncio.ensure_future(self._read_stderr())
+        await asyncio.wait_for(self.ready.wait(), timeout=15)
+        log("oracle ready")
+
+    async def _read_stdout(self):
+        while True:
+            try:
+                line = await self.proc.stdout.readline()
+            except Exception as e:
+                log("oracle stdout read err:", repr(e));
+                await asyncio.sleep(0.01); continue
+            if not line:
+                break
+            try: msg = json.loads(line.decode("utf-8").strip())
+            except Exception: continue
+            ev = msg.get("ev")
+            if ev == "ready": self.ready.set()
+            elif ev == "tx":
+                # Match the web client: it IGNORES the recv frame-manager's send_packet output (no NACKs).
+                # Only the sender frame-manager's packets (commands) go on the wire.
+                if msg.get("src") == "send" and self.on_tx:
+                    self.on_tx(base64.b64decode(msg["b64"]))
+            elif ev == "frame":
+                if self.on_frame: self.on_frame(msg.get("channel"), base64.b64decode(msg["b64"]))
+            elif ev == "control_status":
+                if self.on_control_status: self.on_control_status(msg.get("status"))
+            elif ev == "error":
+                log("oracle error:", msg)
+
+    async def _read_stderr(self):
+        async for line in self.proc.stderr:
+            s = line.decode("utf-8", "replace").rstrip()
+            if s and "SCTP Version" not in s:
+                log("oracle[stderr]:", s[:200])
+
+    def push_recv(self, ptcs_bytes):
+        self._write({"op": "recv", "b64": base64.b64encode(ptcs_bytes).decode()})
+
+    def push_send(self, link, frame_bytes):
+        self._write({"op": "send", "link": link, "b64": base64.b64encode(frame_bytes).decode()})
+
+    def _write(self, obj):
+        if self.proc and self.proc.stdin:
+            self.proc.stdin.write((json.dumps(obj) + "\n").encode())
+
+
+async def main():
+    from multichannel_probe import MultichannelProbe
+    from video_diagnostics import annexb_codec, ffmpeg_error_category
+    probe = MultichannelProbe() if MULTICHANNEL_PROBE else None
+    perf_started = time.monotonic()
+    oracle = Oracle()
+    sign_task = asyncio.create_task(get_sign_token())
+    await oracle.start()
+    sign_token = await sign_task
+    log("sign token acquired; channels", CHANNELS)
+    log(f"PERF bootstrap_ms={int((time.monotonic() - perf_started) * 1000)}")
+
+    sub = {"region": ec.signaling_region(REGION), "type": "NVR", "sn": STATION_SN,
+           "token": AUTH["authToken"], "gtoken": AUTH["gtoken"], "sign": sign_token,
+           "appName": AUTH.get("appName", "eufy_mega"), "modelType": "WEB"}
+    subproto = base64.urlsafe_b64encode(json.dumps(sub, separators=(",", ":")).encode()).decode().rstrip("=")
+
+    # The official client does not create its RTCPeerConnection until the
+    # status-100 call response supplies TURN credentials.  In particular, its
+    # diagnostic state machine places PEER_CONNECTION_CREATED between
+    # CALL_RESPONSE_100 and CALL_RESPONSE_200.  Keep the same ordering instead
+    # of constructing an unconfigured peer before signalling starts.
+    pc = None
+    chans = {}
+    state = {"connected": False, "started": False, "vbytes": 0, "vframes": 0, "ptcs_in": 0,
+             "cmd_dc_open": False, "frames_seen": 0, "nvr_ip": None, "discovered": False,
+             "fatal_reason": None, "shutting_down": False, "close_sent": False}
+    close_ack = asyncio.Event()
+
+    def on_control_status(status):
+        if state["close_sent"] and status == 0:
+            close_ack.set()
+
+    oracle.on_control_status = on_control_status
+    if CAPTURE_DEBUG:
+        os.makedirs(os.path.join(ROOT, "_debug"), exist_ok=True)
+        dumpf = open(VIDEO_DUMP, "wb")
+        framelog = open(FRAMES_LOG, "w")
+    else:
+        dumpf = open(os.devnull, "wb")
+        framelog = open(os.devnull, "w")
+
+    # Pick the Annex-B sink: ffmpeg->RTSP (go2rtc), stdout (pipe), or a dump file.
+    ffmpeg_proc = None
+    ffmpeg_stderr_task = None
+    bounded_video = None
+    if RTSP_URL:
+        # Transcode HEVC -> H.264 so Home Assistant / browsers can render the LIVE view.
+        # (H.265 only shows the still thumbnail; most browsers can't play it live.) Set
+        # EUFY_VIDEO_COPY=1 to passthrough raw H.265 instead (lower CPU, thumbnail only).
+        if os.environ.get("EUFY_VIDEO_COPY") == "1":
+            vcodec = ["-c:v", "copy"]
+            _codec_label = "H.265 (copy)"
+        else:
+            # short GOP so a NEW consumer (HA opening live view) gets an IDR fast instead of
+            # waiting a full GOP. The feed runs <25fps, so g=12 => a keyframe every ~0.5-0.8s
+            # (g=25 was ~1.5-2s of keyframe-wait per open). zerolatency drops B-frames.
+            vcodec = ["-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+                      "-pix_fmt", "yuv420p", "-g", "12", "-keyint_min", "12", "-sc_threshold", "0"]
+            _codec_label = "H.264 (transcoded)"
+        if GRID_2X2:
+            # A stitched NVR output need not use the physical camera's codec.
+            # Let FFmpeg identify AVC/HEVC rather than forcing the HEVC decoder.
+            from video_pipeline import grid_encoder_args
+            input_args, grid_output = grid_encoder_args()
+            if os.environ.get("EUFY_VIDEO_COPY") != "1":
+                vcodec = grid_output
+            timing_args = []
+        else:
+            input_args = ["-probesize", "32", "-analyzeduration", "0", "-f", "hevc"]
+            timing_args = ["-r", "25"]
+        ffmpeg_proc = await asyncio.create_subprocess_exec(
+            FFMPEG, "-hide_banner", "-loglevel", "warning",
+            # Preserve the first HEVC random-access frame. nobuffer discards
+            # packets consumed during probing; the following dependent frames
+            # can decode as grey concealment and poison HA's thumbnail cache.
+            # The input format is known, so probing only delays go2rtc publication.
+            # HA's camera proxy has a hard 10-second image timeout and the NVR's
+            # WebRTC handshake already consumes most of it on a cold start.
+            *input_args, *timing_args, "-i", "pipe:",
+            *vcodec, "-rtsp_transport", "tcp", "-f", "rtsp", RTSP_URL,
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE)
+        async def relay_safe_encoder_errors():
+            seen = set()
+            while line := await ffmpeg_proc.stderr.readline():
+                category = ffmpeg_error_category(line.decode("utf-8", "replace"))
+                if category is not None and category not in seen:
+                    seen.add(category)
+                    log("FFMPEG_ERROR_CATEGORY", category)
+        ffmpeg_stderr_task = asyncio.create_task(relay_safe_encoder_errors())
+        sink = ffmpeg_proc.stdin
+        from video_pipeline import BoundedVideoWriter
+        def encoder_backlog_failure(reason):
+            state["fatal_reason"] = f"encoder backlog: {reason}"
+            log("ENCODER_BACKLOG", reason)
+            if ffmpeg_proc.returncode is None:
+                try:
+                    ffmpeg_proc.terminate()
+                except ProcessLookupError:
+                    pass
+        bounded_video = BoundedVideoWriter(sink, encoder_backlog_failure)
+        # RTSP_URL may contain the local go2rtc password; never print it.
+        log(f"ffmpeg publishing {_codec_label} to the configured RTSP endpoint")
+    elif STDOUT_MODE:
+        sink = sys.stdout.buffer
+    else:
+        sink = dumpf
+
+    def send_ptcs(buf):
+        ch = chans.get("WebrtcDataChannel")
+        try:
+            if ch and ch.readyState == "open":
+                ch.send(buf)
+            else:
+                log("!! cannot send PTCS, cmd DC not open")
+        except Exception as e:
+            log("send_ptcs err:", e)
+    oracle.on_tx = send_ptcs
+
+    def on_frame(link, buf):
+        state["frames_seen"] += 1
+        xz = buf[:4] == b"XZYH"
+        cmdid = (buf[4] | (buf[5] << 8)) if (xz and len(buf) >= 6) else -1
+        payload = buf[16:] if xz else buf
+        if cmdid in (1300, 1301, 1303):                      # VIDEO: strip 16B XZYH + 22B media hdr -> Annex-B
+            if probe is not None:
+                probe.observe(buf)
+            if ffmpeg_proc is not None and ffmpeg_proc.returncode is not None:
+                if state["fatal_reason"] is None:
+                    state["fatal_reason"] = f"ffmpeg exited rc={ffmpeg_proc.returncode}"
+                    log(f"FFMPEG_EXIT rc={ffmpeg_proc.returncode}")
+                return
+            nal = payload[22:]
+            if GRID_2X2 and not state.get("codec_identified"):
+                codec = annexb_codec(nal)
+                if codec != "unknown":
+                    state["codec_identified"] = True
+                    log("GRID_INPUT_CODEC", codec)
+            state["vbytes"] += len(nal); state["vframes"] += 1
+            try:
+                if bounded_video is not None:
+                    bounded_video.submit(nal)
+                else:
+                    sink.write(nal)
+                    if hasattr(sink, "flush"): sink.flush()
+            except Exception as e:
+                state["fatal_reason"] = f"video sink failed ({type(e).__name__})"
+                log("sink write err:", e)
+                return
+            progress_now = time.monotonic()
+            if state["vframes"] == 1:
+                state["last_video_log"] = progress_now
+                log(f"VIDEO #{state['vframes']} cmd={cmdid} link={link} payload={len(payload)} "
+                    f"nal={payload[:8].hex()} total={state['vbytes']}")
+                log(f"PERF first_video_ms={int((progress_now - perf_started) * 1000)}")
+            elif progress_now - state.get("last_video_log", 0.0) >= 5.0:
+                state["last_video_log"] = progress_now
+                log(f"VIDEO_PROGRESS frames={state['vframes']} bytes={state['vbytes']}")
+            if state["vframes"] <= 20:
+                framelog.write(json.dumps({"video": True, "cmd": cmdid, "link": link, "n": state["vframes"],
+                                           "plen": len(payload), "nal": payload[:24].hex()}) + "\n"); framelog.flush()
+        elif cmdid == 1032:                                  # per-channel status (do NOT ack)
+            chid = buf[12] if len(buf) > 12 else -1
+            val = int.from_bytes(payload[:4], "little", signed=True) if len(payload) >= 4 else None
+            framelog.write(json.dumps({"status1032": True, "channel": chid, "val": val}) + "\n"); framelog.flush()
+            n = state.get("st1032", 0)
+            if n < 12:
+                state["st1032"] = n + 1; log(f"status cmd1032 ch={chid} val={val}")
+        else:                                                # control responses (1351 params, 1003/1004 acks, 9100)
+            try: txt = payload.split(b"\x00")[0].decode("utf-8", "replace")
+            except Exception: txt = ""
+            if DISCOVER and '"dev_list"' in txt and not state["discovered"]:
+                handle_devlist(txt)
+            else:
+                log(f"CTRL cmd={cmdid} link={link} len={len(buf)} {txt[:170]}")
+            framelog.write(json.dumps({"ctrl": True, "cmd": cmdid, "link": link, "len": len(buf), "txt": txt[:600]}) + "\n"); framelog.flush()
+    oracle.on_frame = on_frame
+
+    def handle_devlist(txt):
+        try:
+            obj = json.loads(txt)
+        except Exception as e:
+            log("devlist parse err:", e); return
+        dl = obj.get("payload", {}).get("dev_list") or obj.get("dev_list") or []
+        cams = [{"channel": d.get("ch"), "name": d.get("name"), "sn": d.get("sn"),
+                 "status": d.get("status"), "dev_type": d.get("dev_type"),
+                 "sensor_num": d.get("sensor_num")} for d in dl]
+        manifest = {"nvr_sn": STATION_SN, "nvr_ip": state["nvr_ip"], "cameras": cams}
+        out = CAMERAS_JSON
+        # Write-then-rename (like auth_login.py) so gen_go2rtc.py, or a fallback that
+        # reuses the persisted /data copy, never sees a half-written manifest.
+        tmp = out + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(manifest, fh, indent=2)
+        os.replace(tmp, out)
+        log(f"DISCOVERED nvr_ip={state['nvr_ip']} sn={STATION_SN}: {len(cams)} camera(s)")
+        for c in cams:
+            log(f"   ch {c['channel']}: {c['name']!r} (sn {c['sn']}, status {c['status']})")
+        log(f"wrote {out}")
+        state["discovered"] = True
+
+    async def heartbeat_loop():
+        ping = build_ping()
+        await asyncio.sleep(0.5)
+        while True:
+            ch = chans.get("WebrtcDataChannel")
+            try:
+                if ch and ch.readyState == "open":
+                    ch.send(ping)
+            except Exception as e:
+                log("ping err:", e)
+            await asyncio.sleep(10)
+
+    async def start_sequence():
+        if DISCOVER:
+            dl = build_devicelist(USER_ID)
+            log(f"-> getDeviceList (9100) len={len(dl)}  [auto-discovery]")
+            oracle.push_send(1, dl)
+            return
+        # openLive (1103) param query, then the REAL trigger startStream (1003).
+        ol = build_openlive(USER_ID, CHANNELS)
+        log(f"-> openLive (1103) len={len(ol)} channels={CHANNELS}")
+        oracle.push_send(1, ol)
+        # The NVR acknowledges openLive in tens of milliseconds. A short guard
+        # is sufficient and keeps cold starts inside HA's image timeout.
+        await asyncio.sleep(0.15)
+        ss = build_startstream(USER_ID, CHANNELS, stream_id=1, grid=GRID_2X2)
+        if GRID_2X2:
+            from live_layout import layout_options, shared_lens_entries, runtime_layout_args
+            lens = os.environ.get("EUFY_GRID_LENS", "movable")
+            layout_args = runtime_layout_args(os.environ, CHANNELS)
+            log("GRID_LAYOUT", f"lens={lens}",
+                f"cells={len(shared_lens_entries(CHANNELS, lens, **layout_args))}",
+                f"mode={layout_options(CHANNELS, True, lens, **layout_args)['stitch_mode']}")
+        log(f"-> startStream (1003) len={len(ss)} streamId=1  [THE video trigger]")
+        oracle.push_send(1, ss)
+
+    async def stats_loop():
+        last = (0, 0)
+        while True:
+            await asyncio.sleep(4)
+            cur = (state["ptcs_in"], state["vframes"])
+            log(f"STATS ptcs_in={state['ptcs_in']} video={state['vframes']} vbytes={state['vbytes']} "
+                f"frames_seen={state['frames_seen']}  (+{cur[0]-last[0]} pkts, +{cur[1]-last[1]} vid /4s)")
+            last = cur
+
+    async def close_live():
+        """Tell the NVR to retire its control/live session before WebRTC closes."""
+        channel = chans.get("WebrtcDataChannel")
+        if (
+            state["close_sent"]
+            or not state["started"]
+            or channel is None
+            or channel.readyState != "open"
+        ):
+            return
+        state["close_sent"] = True
+        try:
+            close = build_cmd(USER_ID, 1004, {})
+            log(f"-> closeLive (1004) len={len(close)}")
+            oracle.push_send(1, close)
+            # Keep the data channel alive until the NVR acknowledges teardown.
+            # A bounded fallback still lets shutdown finish if the ack is lost.
+            try:
+                await asyncio.wait_for(close_ack.wait(), timeout=1.0)
+                log("<- closeLive acknowledged")
+            except asyncio.TimeoutError:
+                log("closeLive acknowledgement timed out; closing transport")
+        except Exception as error:
+            log("closeLive send failed:", type(error).__name__)
+
+    def maybe_start():
+        if state["connected"] and state["cmd_dc_open"] and not state["started"]:
+            state["started"] = True
+            log("connected+DC open; heartbeat on; starting sequence")
+            asyncio.ensure_future(heartbeat_loop())
+            asyncio.ensure_future(stats_loop())
+            asyncio.ensure_future(start_sequence())
+
+    def attach(ch, mine):
+        @ch.on("open")
+        def _open():
+            log(f"DC open: {ch.label}")
+            if ch.label == "WebrtcDataChannel":
+                state["cmd_dc_open"] = True; maybe_start()
+        @ch.on("message")
+        def on_msg(msg):
+            b = msg if isinstance(msg, (bytes, bytearray)) else str(msg).encode()
+            b = bytes(b)
+            if len(b) >= 4 and b[0] == 0x50 and b[1] == 0x54 and b[2] == 0x43 and b[3] == 0x53:  # "PTCS"
+                state["ptcs_in"] += 1
+                if state["ptcs_in"] <= 3:
+                    log(f"PTCS in on {ch.label}: len={len(b)} head={b[:32].hex()}")
+                oracle.push_recv(b)
+            else:
+                # heartbeat (1139 @ off24) or other; log a few
+                if state["ptcs_in"] < 2:
+                    log(f"non-PTCS on {ch.label}: len={len(b)} head={b[:28].hex()}")
+
+    def ensure_peer_connection(turn=None):
+        """Create the peer once, using status-100 TURN data when available."""
+        nonlocal pc
+        if pc is not None:
+            return pc
+
+        ice_servers = []
+        if isinstance(turn, dict):
+            address = turn.get("turn_addr")
+            port = turn.get("turn_port")
+            username = turn.get("turn_user")
+            credential = turn.get("turn_password")
+            if address and port and username and credential:
+                ice_servers.append(RTCIceServer(
+                    urls=f"turn:{address}:{port}",
+                    username=str(username),
+                    credential=str(credential),
+                ))
+
+        pc = RTCPeerConnection(RTCConfiguration(iceServers=ice_servers))
+        log("peer connection created", f"turn_configured={str(bool(ice_servers)).lower()}")
+
+        @pc.on("datachannel")
+        def on_dc(ch):
+            attach(ch, False)
+
+        @pc.on("connectionstatechange")
+        async def on_cs():
+            log("connectionState:", pc.connectionState)
+            if pc.connectionState == "connected":
+                from media_route import selected_route
+                log("MEDIA_ROUTE", selected_route(pc))
+                state["connected"] = True
+                maybe_start()
+
+        @pc.on("iceconnectionstatechange")
+        async def on_ice():
+            log("iceConnectionState:", pc.iceConnectionState)
+
+        return pc
+
+    async with websockets.connect(WS_URL, subprotocols=["v1", subproto],
+                                  additional_headers={"Origin": "https://security.eufy.com"},
+                                  user_agent_header=UA, max_size=2**22) as ws:
+        same_identity = hmac.compare_digest(
+            hashlib.sha256(USER_ID.encode()).digest(),
+            hashlib.sha256(SIGNALING_USER_ID.encode()).digest(),
+        )
+        log("signaling identity source", SIGNALING_IDENTITY_SOURCE,
+            f"matches_passport={str(same_identity).lower()}")
+        sig = Signal(ws, sign_token, AUTH["authToken"], SIGNALING_USER_ID,
+                     SIGNALING_CHANNEL, CALL_TYPE)
+        log(f"WSS connected; joining with {CALL_TYPE} signaling..."); await sig.join()
+        answered = [False]; pending = []
+        ffmpeg_watchdog_task = None
+
+        async def ffmpeg_watchdog():
+            rc = await ffmpeg_proc.wait()
+            if not state["shutting_down"]:
+                state["fatal_reason"] = f"ffmpeg exited rc={rc}"
+                log(f"FFMPEG_EXIT rc={rc}")
+                await ws.close()
+
+        if ffmpeg_proc is not None:
+            ffmpeg_watchdog_task = asyncio.create_task(ffmpeg_watchdog())
+
+        async def add_cand(cand):
+            try:
+                peer = ensure_peer_connection()
+                p = cand.split()
+                if len(p) > 7 and p[6] == "typ" and p[7] == "host" and _lan_ipv4(p[4]) and not state["nvr_ip"]:
+                    state["nvr_ip"] = p[4]   # the NVR's LAN IP (direct path) from its host ICE candidate
+                c = candidate_from_sdp(cand.split(":", 1)[1]); c.sdpMid = "2"; c.sdpMLineIndex = 0
+                await peer.addIceCandidate(c)
+            except Exception as e: log("addIceCandidate err:", e)
+
+        async def handle(raw):
+            inner, d = parse_msg(raw)
+            log("signal shape", safe_signal_shape(inner, d))
+            if not isinstance(inner, dict): return
+            action = inner.get("action")
+            if action == 1:
+                log("join ack:", d); await sig.call()
+            elif action == 3 and isinstance(d, dict):
+                if inner.get("dataType") in ("call", "scall") and "status" in d:
+                    status = d.get("status")
+                    turn = d.get("turn")
+                    turn_state = "present" if isinstance(turn, dict) else "absent"
+                    log("scall/turn status", status, f"mode={sig.call_type}",
+                        f"turn_credentials={turn_state}")
+                    if status == 100:
+                        ensure_peer_connection(turn)
+                    if status == 200:
+                        await sig.ack()
+                elif d.get("format") == "SDP":
+                    val = d["value"]
+                    compact = None
+                    if isinstance(val, str):
+                        try:
+                            compact = json.loads(val)
+                        except json.JSONDecodeError:
+                            pass
+                    elif isinstance(val, dict):
+                        compact = val
+                    if isinstance(compact, dict) and isinstance(compact.get("ice"), dict):
+                        offer = build_offer_sdp(compact["ice"], compact.get("setup", "actpass"))
+                        offer_mode = "compact"
+                    elif isinstance(val, str) and val.lstrip().startswith("v=0"):
+                        offer = val
+                        offer_mode = "native"
+                    else:
+                        state["fatal_reason"] = "invalid SDP offer"
+                        log("invalid SDP offer received")
+                        await ws.close()
+                        return
+                    log(f"NVR SDP offer received ({offer_mode})")
+                    if not answered[0]:
+                        answered[0] = True
+                        peer = ensure_peer_connection()
+                        await peer.setRemoteDescription(RTCSessionDescription(sdp=offer, type="offer"))
+                        for lbl in ["WebrtcDataChannel", "audio", "idr", "video", "notify", "download"]:
+                            chans[lbl] = peer.createDataChannel(lbl); attach(chans[lbl], True)
+                        ans = await peer.createAnswer(); await peer.setLocalDescription(ans)
+                        uf, pw, fp, cands = extract_local_ice(peer.localDescription.sdp)
+                        log(f"answer sent; our cands={len(cands)}")
+                        await sig.send_sdp(peer.localDescription.sdp, uf, pw, fp, "active")
+                        for c in cands: await sig.send_candidate(c)
+                        for pcand in pending: await add_cand(pcand)
+                        pending.clear()
+                elif d.get("format") == "CANDIDATE":
+                    cand = d["value"]
+                    if not answered[0] or pc is None or pc.remoteDescription is None: pending.append(cand)
+                    else: await add_cand(cand)
+
+        async def discover_watchdog():
+            # Discovery completes on the DataChannel (handle_devlist via on_frame), NOT on the
+            # signaling WS. After ICE settles the WS goes idle, so the `async for raw in ws`
+            # below blocks forever and never re-checks state["discovered"]. Poll the flag and
+            # close the WS to end the loop; cap the wait so run.sh's retry can take over.
+            for _ in range(80):                      # ~40s ceiling
+                if state["discovered"]:
+                    break
+                await asyncio.sleep(0.5)
+            try:
+                await ws.close()
+            except Exception:
+                pass
+
+        if DISCOVER:
+            asyncio.create_task(discover_watchdog())
+
+        async def probe_watchdog():
+            # Independent of the signaling receive loop, which can become idle.
+            await asyncio.sleep(45)
+            log("MULTICHANNEL_PROBE_RESULT", json.dumps(probe.summary(), sort_keys=True))
+            await ws.close()
+
+        probe_task = asyncio.create_task(probe_watchdog()) if probe is not None else None
+
+        try:
+            async for raw in ws:
+                await handle(raw)
+                if DISCOVER and state["discovered"]:
+                    log("discovery done; stopping."); break
+                if not STREAM_MODE and not DISCOVER and state["vframes"] > 600:
+                    log("collected plenty of video; stopping."); break
+        except Exception as e:
+            log("ws loop err:", repr(e))
+        finally:
+            state["shutting_down"] = True
+            await close_live()
+            if probe_task is not None and not probe_task.done():
+                probe_task.cancel()
+                await asyncio.gather(probe_task, return_exceptions=True)
+                log("MULTICHANNEL_PROBE_RESULT", json.dumps(probe.summary(), sort_keys=True))
+            if ffmpeg_watchdog_task is not None and not ffmpeg_watchdog_task.done():
+                ffmpeg_watchdog_task.cancel()
+                await asyncio.gather(ffmpeg_watchdog_task, return_exceptions=True)
+
+    if pc is not None:
+        await pc.close()
+    dumpf.close(); framelog.close()
+    if oracle.proc:
+        try:
+            oracle.proc.terminate()
+            await asyncio.wait_for(oracle.proc.wait(), timeout=3)
+        except asyncio.TimeoutError:
+            oracle.proc.kill()
+            await oracle.proc.wait()
+        except ProcessLookupError:
+            pass
+    if bounded_video is not None:
+        await bounded_video.close()
+    if ffmpeg_proc:
+        try:
+            if ffmpeg_proc.stdin:
+                ffmpeg_proc.stdin.close()
+            if ffmpeg_proc.returncode is None:
+                ffmpeg_proc.terminate()
+                try:
+                    await asyncio.wait_for(ffmpeg_proc.wait(), timeout=3)
+                except asyncio.TimeoutError:
+                    ffmpeg_proc.kill()
+                    await ffmpeg_proc.wait()
+        except ProcessLookupError:
+            pass
+    if ffmpeg_stderr_task is not None:
+        try:
+            await asyncio.wait_for(ffmpeg_stderr_task, timeout=2)
+        except asyncio.TimeoutError:
+            ffmpeg_stderr_task.cancel()
+            await asyncio.gather(ffmpeg_stderr_task, return_exceptions=True)
+    log(f"DONE. video frames={state['vframes']} bytes={state['vbytes']} ptcs_in={state['ptcs_in']} "
+        f"frames_seen={state['frames_seen']}")
+    # In --discover mode only a written manifest counts as success. Returning this lets
+    # the caller (the add-on run.sh) tell a real discovery from one that merely timed
+    # out — otherwise it logs "Discovery OK" and gen_go2rtc.py dies on a missing file.
+    return ((not DISCOVER) or state["discovered"]) and not state["fatal_reason"]
+
+if __name__ == "__main__":
+    try:
+        ok = asyncio.run(main())
+    except KeyboardInterrupt:
+        ok = True
+    if not ok:
+        log("discovery finished without a camera list; cameras.json not written")
+        sys.exit(1)

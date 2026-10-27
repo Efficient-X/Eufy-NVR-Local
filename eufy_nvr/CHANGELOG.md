@@ -1,0 +1,460 @@
+# Changelog
+
+## 0.8.0-beta.1 (private capacity candidate)
+
+- Distinguish physical devices from lens channels. Discover reported lens counts,
+  retain known S4 fallbacks for older manifests, and reject unknown capabilities.
+- Generate one 2x2, 3x3 or 4x4 shared stream for up to 16 lens channels: eight
+  dual-lens units, sixteen single-lens units, or a valid mixture. The existing
+  four-dual-camera eight-view arrangement is preserved. Full capacity is tested
+  with synthetic manifests, not yet a fully populated physical NVR.
+- Add optional `grid_columns` (0 automatic, 2, 3 or 4). Larger grids stay at
+  1080p source resolution. A 4x4 cell is therefore only 480x270; enlargement does
+  not create an independent full-resolution lens stream.
+- New installations default to both lenses, shared-grid mode and H.265 copy.
+  Existing saved options are not migrated. Playback needs an HEVC-capable browser.
+- Companion setup can select a running installed NVR app and obtain its local
+  connection settings server-side. Manual setup remains available. This does not
+  replace the app's Eufy sign-in/verification process with a new account wizard.
+- Suppress companion background individual snapshots while the shared stream is
+  configured, avoiding competition for the NVR's one session. Companion Python
+  changes require a Home Assistant restart; app-only updates do not load them.
+- No credential rotation, new listener, recording change or public release.
+
+## 0.7.36 (diagnostic fork)
+
+- Match the hardware-verified vendor dual-lens topology: three vertically
+  aligned fixed/moved pairs plus the remaining split pair in a 3x3 mosaic.
+- Request the vendor's 1080p format only for both mode. Retain one encoder,
+  bounded queues, two decoder/encoder threads and 720p/10 fps output limits.
+- Fixed/movable modes unchanged. Hardware CPU and eight-view tests required;
+  no companion update, new ports or Home Assistant restart needed.
+
+## 0.7.35 (diagnostic fork)
+
+- Correct opt-in both-lens request to carry explicit split-lens metadata and
+  current official web live-command fields. Requires hardware verification.
+- Leave known-good fixed/movable requests and bounded 720p/10 fps encoder unchanged.
+- Prepare real enlarged-camera modal reusing the single decoded stream;
+  frontend installed separately. No credentials, ports or Core restart changes.
+
+## 0.7.34 (diagnostic fork)
+
+- Add opt-in `grid_lens: both`: fixed views first, followed by moved views in
+  one 3x3 NVR mosaic. Keep the same physical-channel sign-in and one producer.
+- Preserve existing fixed/movable modes and all stream/entity names.
+- Retain the 720p/10 fps output cap and thread limits. Eight-view cells have
+  approximately 426x240 detail; this requires a bounded hardware/resource test.
+- Report only safe lens/layout metadata. No password changes, extra ports,
+  companion installation or HA Core restart.
+
+## 0.7.33 (diagnostic fork)
+
+- Add fixed/movable shared-grid lens selection. Defaults to movable to preserve
+  existing settings until deliberately changed. Same physical channel IDs.
+- Report only the selected WebRTC route category, never candidate addresses or
+  credentials. Unknown remains unknown; internet signalling is still required.
+- Prepare one-player separate visual tile frontend (installed separately).
+  Preserve low-load 720p/10 fps pipeline; no HA Core restart needed for app update.
+
+## 0.7.32 (diagnostic fork)
+
+- Request a 720p shared-grid source; cap grid output at 720p/10 fps with two
+  encoder/decoder threads. Use arrival timestamps instead of forcing 25 input fps.
+- Bound the compressed-video handoff by bytes, queue depth and age; retire a
+  stalled producer rather than retain unlimited old video or drop interframes.
+- Preserve ports, credentials and stream names. App-only deployment; no HA Core
+  restart or dashboard changes. Requires monitored Green CPU/latency validation.
+
+## 0.7.31 (diagnostic fork)
+
+- Allow FFmpeg to identify AVC/HEVC for the optional stitched grid while retaining
+  the existing single-camera input settings. Report only allowlisted codec/error
+  categories, never raw FFmpeg lines, URLs, credentials or media bytes.
+
+## 0.7.30 (diagnostic fork)
+
+- Add an opt-in shared 2x2 NVR layout limited to one 1080p composite stream.
+  Preserve existing camera stream names and add eufy_shared_grid. This needs
+  visual hardware validation; it is not a proven simultaneous-live fix yet.
+
+## 0.7.29 (diagnostic fork)
+
+- Add an opt-in, one-shot 45-second shared-session probe requesting camera
+  channels 0, 1 and 2. Count only allowlisted frame metadata in memory, with no
+  media export or RTSP publication. Resume normal single-session service after
+  the probe. This is a protocol test, not a completed simultaneous-live fix.
+
+## 0.7.28 (diagnostic fork)
+
+- Preserve the initial HEVC random-access frame during FFmpeg input probing.
+  Remove nobuffer from the bridge's transcoder while retaining the small probe
+  and zero-latency H.264 encoding. Validate first-picture quality on hardware.
+
+## 0.7.27 (diagnostic fork)
+
+- Allow an explicit RTSP listener port when an existing household service owns
+  8556. Keep the original default and other ports unchanged.
+
+## 0.7.26 (diagnostic fork)
+
+- Report only allowlisted credential-free browser-session rejection categories,
+  distinguishing account, station and region mismatches without bypassing checks.
+
+## 0.7.25 (diagnostic fork)
+
+- Add explicitly opted-in browser-session diagnostic import from a temporary
+  tailnet endpoint. Validate account, station and region against the existing
+  cache; never include tokens in options or logs. Restore original auth on exit
+  or next startup. Skip headless login and periodic refresh during this probe.
+
+## 0.7.24 (diagnostic fork)
+
+- Match the successfully captured official portal signing request: obtain the
+  WebSocket sign token without the legacy station_sn query parameter. The
+  authenticated WebSocket envelope continues to select the NVR by its serial.
+- Keep the v0.7.23 proof selector for controlled comparison.
+
+## 0.7.23 (diagnostic fork)
+
+- Add an opt-in `signaling_identity: web_empty` probe matching the official
+  client's empty `sessionStorage.admin_user_id` fallback. Keep `nvr_admin` as
+  the default and retain authenticated session tokens and command identities.
+- Preserve bounded retries and privacy-safe diagnostic output.
+
+## 0.7.22 (diagnostic fork)
+
+- Log only privacy-safe signalling message structure (known field names and unknown-field counts) so ignored protocol steps can be identified without recording tokens, identifiers, TURN values, SDP, candidates, or camera data.
+
+## 0.7.21 (diagnostic fork)
+
+- Mirror the official web client's signalling order by creating the WebRTC peer connection after call status 100 and before status 200.
+- Configure aiortc with the returned TURN server without logging its address, username, password, or other credential values.
+
+## 0.7.20 (diagnostic fork)
+
+- Add an opt-in, one-shot fresh-authentication probe that preserves the existing validated cache if Eufy challenges or rejects the new login.
+- Record whether a status-100 signalling response contains TURN credentials without logging the credentials or any account/device identifiers.
+
+## 0.7.19 (diagnostic fork)
+
+- Vendor the reviewed bridge source directly into the Home Assistant add-on build context so the installed image cannot silently fetch and run an older upstream commit.
+- Add release tests that require every packaged bridge file to match its reviewed repository source byte-for-byte.
+
+## 0.7.18 (diagnostic fork)
+
+- Resolve the selected NVR's administrator identity from station metadata and use it only for the action-3 signaling proof, matching the current official web client.
+- Preserve the passport identity for NVR application commands and compare identities only through fixed-length digests without logging either identifier.
+- Enrich a still-live v1 authentication cache in place so testing does not consume a fresh passport login or trigger avoidable verification/login limits.
+
+## 0.7.17
+
+- Anchor multi-channel signaling to channel 0, as validated by the reporter on a four-camera NVR.
+- Verify DTLS peer identity from the certificate's original DER bytes for devices whose certificates strict ASN.1 parsing rejects.
+- Stop the Home Assistant snapshot primer cleanly during integration unload.
+- Add an optional `disabled_channels` setting to keep cameras with unresolved stream failures out of go2rtc and snapshot priming.
+- Keep the add-on's immutable source pin current with these fixes. Camera-specific T8N00/S4 Max stream failures still require device validation.
+
+## 0.7.16
+
+- Validate the persisted account-bound token against `ws/sign` before logging in. Container restarts and periodic
+  checks now reuse a live token instead of creating another passport session, avoiding Eufy's daily login cap.
+- Refuse to start producer retry storms when both the cached token and fresh login are rejected. Periodic renewal
+  happens only after the live validation fails.
+
+## 0.7.15
+
+- Default T8N00 signaling to native `call` and parse/send full SDP offers and answers. Live probes against
+  an online NVR with four online cameras showed compact `scall` remaining at status 100 before status 408,
+  while native `call` reached status 200 in 1.9 seconds and delivered its SDP offer in 2.6 seconds.
+- Keep explicit `scall` support for diagnostics and correct the WebSocket subprotocol region so it follows
+  the selected smart-service region rather than the account country.
+
+## 0.7.14
+
+- Update the reversed NVR signaling envelope to match Eufy's current official web client. Action messages now
+  use `MD5(channel + admin_user_id + timestamp)` as the account proof, carry the actual camera channel, prefix
+  request IDs with the authenticated session token, and acknowledge scall status 200 immediately. The old random
+  proof/channel-0 envelope was accepted by the signaling WebSocket but could leave the NVR indefinitely at TURN
+  status 100 without an SDP offer.
+
+## 0.7.13
+
+- Align Home Assistant's initial snapshot request with the complete supervised Eufy retry window. The primer no
+  longer cancels after nine seconds and immediately queues another producer while go2rtc is still waiting for the
+  NVR. A 95-second per-camera ceiling and 180-second aggregate setup budget allow recovery without blocking HA
+  indefinitely during an Eufy signaling outage.
+- Extend go2rtc's producer startup ceiling to 90 seconds so time spent waiting for the NVR's one-session gate does
+  not consume the retry attempt before signaling begins.
+- Reject graceful child exit as discovery success when the supervisor itself ended a stalled TURN session. A
+  cached `cameras.json` can no longer hide a failed fresh discovery.
+
+## 0.7.12
+
+- Prime every camera's bounded fallback image before Home Assistant exposes the camera entities. This removes
+  the startup race where dashboard requests could consume Home Assistant's ten-second proxy deadline while the
+  NVR was still rotating its single hardware session through the sequential primer.
+- Exclude go2rtc's `keyframe`, `jpeg`, and `mjpeg` snapshot consumers from the adaptive live-view lease. A Home
+  Assistant thumbnail refresh now releases the Eufy session promptly instead of looking like a live viewer and
+  retaining the camera for another 30 seconds.
+
+## 0.7.11
+
+- Add a direct cross-process preemption hint from a queued Eufy producer to the adaptive warm controller.
+  go2rtc does not expose a waiting consumer until its producer starts, so API-only observation could not see a
+  different camera blocked behind the retained session. The session gate now evicts that warm lease immediately,
+  while same-camera reopens still reuse the existing producer without spawning a waiter.
+
+## 0.7.10
+
+- Preserve the post-`closeLive` appliance teardown grace during normal go2rtc camera handoffs. The graceful
+  signal correctly closed the Eufy session in 0.7.9, but its stop event also skipped the final one-second lock
+  hold, allowing the next queued camera to race the NVR's internal retirement and receive status `486`.
+
+## 0.7.9
+
+- Configure go2rtc to stop the Eufy supervisor with `SIGINT` and allow a five-second graceful ceiling.
+  Its default `exec.CommandContext` cancellation killed the wrapper immediately, bypassing `closeLive` and
+  leaving an orphan child WebRTC session that made later cameras receive signaling status `486`.
+- Wait for the NVR's status-0 `closeLive` acknowledgement before closing WebRTC, with a bounded fallback if
+  the acknowledgement is lost.
+- Serve seeded thumbnails stale-while-revalidate: expired dashboard images return immediately while one
+  serialized background refresh updates them. First-ever camera seeds receive a 30-second aggregate window
+  so a four-camera cold burst completes under the NVR's one-camera hardware limit instead of partially 500ing.
+
+## 0.7.8
+
+- Send `closeLive` after discovery sessions as well as video sessions. The NVR counts the discovery
+  WebRTC control connection against the same one-session limit, so merely closing the peer connection
+  could make every later producer receive signaling status `486` despite no active local consumer.
+- Retry only cameras that still lack a primed snapshot, using bounded exponential backoff. A partial
+  startup cycle no longer waits 30 minutes before trying the missing camera fallbacks again or repeats
+  successful camera work during the retry window.
+
+## 0.7.7
+
+- Send Eufy's `closeLive` command (`cmd 1004`) over the active SCTP/WebRTC control channel before
+  stopping a producer. Previous releases killed the process tree without telling the appliance to
+  retire the live session, which could leave every subsequent camera request returning status `486`.
+- Make supervised shutdown graceful-first: interrupt only the Python protocol engine while keeping
+  its framing oracle and media child alive long enough to transmit `closeLive`, then force-clean the
+  complete process group if it does not exit within the bounded grace period.
+
+## 0.7.6
+
+- Reduce go2rtc's idle producer kill delay from eight seconds to one. The adaptive warmer already
+  owns intentional reuse, so the old delay only consumed almost all of Home Assistant's nine-second
+  snapshot deadline when handing the NVR's single session to another camera.
+- Keep the cross-process Eufy session gate locked for a separate one-second appliance teardown grace
+  period. This prevents the next producer from racing the NVR's internal WebRTC cleanup and receiving
+  signaling status `486`.
+- Add credential-free adaptive-controller startup/API diagnostics for live deployment verification.
+
+## 0.7.5
+
+- Prime one snapshot per camera sequentially after Home Assistant loads the integration, then refresh
+  the fallback set only every 30 minutes. A shared one-hour stale cache lets a first-time multi-camera
+  dashboard return known images while the NVR services cold producers one at a time, instead of timing
+  out later camera requests.
+- Share snapshot coalescing across all camera entities and retain per-camera eviction, preserving the
+  NVR's one-session invariant without coupling unrelated camera lifecycles.
+
+## 0.7.4
+
+- Serialize access to the NVR's single live WebRTC session across every camera producer and classify
+  signaling status `486` immediately, eliminating the 25-second timeout/retry cascades caused by
+  concurrent Home Assistant dashboard requests.
+- Replace the permanent per-camera `keep_warm` processes with an Eufy-specific adaptive session
+  controller. It holds only the most recently viewed camera for 30 seconds by default, hands the
+  session to a newly requested camera, and carries credentials only in authenticated HTTP headers.
+- Serve snapshots through go2rtc's authenticated, coalescing JPEG endpoint instead of launching a
+  second Home Assistant FFmpeg process. Cache a fresh frame for 30 seconds and use a bounded stale
+  frame during transient camera handoffs so dashboards reopen immediately.
+- Start cloud signing and the SCTP framing runtime in parallel, disable debug-frame disk writes unless
+  explicitly requested, and reduce per-frame hot-path logging while retaining five-second progress
+  markers for stall detection.
+- Change the container health check to an authentication-independent TCP probe so enabling required
+  go2rtc credentials cannot make a healthy add-on appear unhealthy.
+
+## 0.7.3
+
+- Make the Dockerfile self-contained with a pinned multi-architecture Debian base image. Current Home
+  Assistant Supervisor versions reject digest references in the deprecated `build.yaml` schema and
+  otherwise fall back to Alpine, where the Debian `apt-get` build fails.
+- Remove the deprecated build file and make CI exercise the same Dockerfile default used by Supervisor.
+
+## 0.7.2
+
+- Implement the current official web mailbox/device-verification flow for `fa_info.step=26052`: request
+  the email code through the push service and repeat the encrypted passport login with the provisional
+  token and six-digit `verification_code` (GitHub issue #13).
+- Bind every auth cache to a non-plaintext account/region/country fingerprint. A failed login now refuses
+  legacy, malformed, or different-account caches instead of feeding a previous user's token to the NVR.
+- Require local go2rtc credentials and apply them to both the management API/UI and RTSP server. The HACS
+  integration supplies Basic auth, emits credentialed RTSP URLs internally, and omits the secret from logs,
+  state attributes, configuration URLs, and diagnostics.
+- Reap the complete engine process group on cancellation or leader exit, add a post-SDP connection timeout,
+  trust the oracle's decoded `-104` marker instead of a byte-length heuristic, and fail producers when
+  ffmpeg exits or its pipe breaks.
+- Pin Python runtime dependencies, CI tools, GitHub Actions, the Home Assistant base images, the bridge
+  source commit, and go2rtc version. Verify
+  SHA-256 for go2rtc and all downloaded Eufy worker assets; remove the mutable unverified FFmpeg download.
+- Run CI against the real runtime dependency set on Python 3.12, 3.13, and 3.14, including import smoke tests.
+- Upgrade `idna` to 3.15, the first patched release for CVE-2026-45409.
+
+## 0.7.1
+
+- Add `eufy_run.py`, a process supervisor around the reversed WebRTC engine. It opens fresh signaling
+  sessions when scall/TURN stalls without an SDP offer, retries a producer that never reaches its first
+  video frame, and restarts a stream that stops producing frames while go2rtc itself remains healthy.
+- Own the complete oracle/ffmpeg/engine process group so failed or stalled sessions are terminated as a
+  unit before retry, preventing abandoned camera producers from accumulating.
+- Route generated go2rtc producers and add-on discovery through the supervisor while retaining go2rtc's
+  60-second startup allowance and bounded kill timeout.
+- Detect the fixed 148-byte non-JSON command-rejection shape reported by shared/member accounts during
+  discovery and emit an explicit owner/admin-account diagnostic instead of retrying a permission failure.
+- Add offline regression coverage for signaling state, video progress/stall markers, authorization
+  classification, and supervised producer generation.
+
+## 0.7.0
+
+- Harden discovery/config generation with persistent collision-safe stream identities, strict manifest and
+  registry validation, atomic writes, and valid empty configuration when all cameras are offline.
+- Harden the Home Assistant integration with safer host/port validation, IPv6-safe URLs, duplicate endpoint
+  detection, corrected reconfiguration identity, removal of the redundant double-reload listener, and
+  coalesced/timeout-bounded snapshots.
+- Upgrade go2rtc from `v1.9.9` to `v1.9.14` and configure a 60-second exec `starttimeout` plus bounded process
+  termination for slow Eufy WebRTC cold starts. This directly addresses the premature `exec: timeout` path
+  reported in issue #5, while keeping the issue open until physical NVR validation confirms the full live path.
+- Document that the configured eufy account must own/administer the NVR; shared/member accounts can authenticate
+  but may receive fixed `-104` command rejections (issue #8).
+- Keep issue #6 open: `scall/turn status 100` without a later status 200 / SDP offer is a separate signalling
+  failure and is not safe to claim fixed without device-side validation.
+- Make development add-on builds use an existing source ref rather than depending on a release tag before it exists.
+
+## 0.6.9
+
+- Update eufy's required SCTP framing runtime from the removed `0_0_2` CDN assets to the current
+  `0_0_4` files used by the web client. Build-time and startup checks now require the matching JS/WASM
+  assets so an image cannot ship with a stale framing runtime.
+
+## 0.6.8
+
+- Persist the discovered camera manifest under `/data` (new `EUFY_CAMERAS` override, mirroring
+  `EUFY_AUTH`) so `eufy_stream.py --discover` and `gen_go2rtc.py` always agree on its location and
+  the list survives a container restart/rebuild.
+- Make `eufy_stream.py --discover` exit non-zero when it never received a camera list, instead of
+  reporting "Discovery OK" and letting `gen_go2rtc.py` crash with `FileNotFoundError` on the missing
+  `cameras.json`. Write the manifest atomically.
+- When discovery keeps failing, regenerate `go2rtc.yaml` from the last persisted camera list before
+  falling back to the previous `go2rtc.yaml`.
+
+## 0.6.7
+
+- Refresh the eufy auth session periodically even when `keep_warm` is disabled, and replace the auth
+  file atomically, so on-demand camera streams continue working after the original token expires.
+- Stop logging the `ws/sign` response body or token prefix, and report expired/rejected sessions with
+  an actionable error instead of an internal `KeyError`.
+
+## 0.6.6
+
+- Start the video stream shortly after the NVR acknowledges `openLive` instead of waiting a fixed
+  second, leaving enough time for Home Assistant to decode the first JPEG within its request limit.
+
+## 0.6.5
+
+- Skip ffmpeg's unnecessary input analysis for the known raw HEVC camera feed. This removes several
+  seconds from a cold stream launch so Home Assistant can receive a still before its fixed 10-second
+  camera-image timeout.
+
+## 0.6.4
+
+- When `homeassistant.local` is unreachable from the Home Assistant Core container, retry the
+  configured internal URL's LAN host automatically. This keeps the friendly default while avoiding
+  mDNS failures inside HAOS containers.
+
+## 0.6.3
+
+- Preserve line boundaries when parsing discovered stream names for `keep_warm`, so each camera gets
+  its own warmer instead of all stream slugs being concatenated into one invalid RTSP path.
+
+## 0.6.2
+
+- Update eufy's required SCTP framing runtime from removed `0_0_1` CDN assets to the current
+  `0_0_2` files used by the web client.
+- Fail the add-on image build when those runtime-critical files cannot be downloaded, and run the
+  offline SCTP round-trip self-test during the build so a broken image cannot be installed again.
+
+## 0.6.1
+
+- Move the add-on's go2rtc to dedicated host-network ports: API `1985`, RTSP `8556`, and WebRTC
+  `8557`. Home Assistant's built-in go2rtc already owns API `1984` on HAOS, so v0.6.0 could connect
+  the companion integration to the wrong server and report that no `eufy_*` cameras existed.
+- Detect a reachable go2rtc containing only non-Eufy streams and report it as the wrong instance,
+  with the dedicated Eufy API port in the corrective message.
+
+## 0.6.0
+
+- Fix discovery and streaming for EU and IE accounts by routing `ws/sign` and the signaling WebSocket
+  through the selected region's smart-service host. Headless and browser-captured auth files now persist
+  the signaling region so manual bridge commands work without re-exporting `EUFY_REGION`.
+- Rebuild the companion integration around a shared go2rtc client, with normalized IPv4/IPv6 endpoints,
+  a distinct "bridge reachable but no Eufy streams" setup error, live producer/consumer attributes, and
+  privacy-safe downloadable diagnostics.
+- Persist `auth.json`, camera discovery, and generated go2rtc configuration under the add-on `/data`
+  directory. A transient login or discovery outage can reuse the last working local configuration.
+- Start the add-on automatically after a host reboot and remove unused Supervisor/Home Assistant API
+  permissions.
+- Pin the bridge source used by the add-on image to the matching `v0.6.0` release instead of mutable `main`.
+
+## 0.5.2
+
+- **More login regions + a separate account country.** The `region` option now offers
+  US | EU | IE (the eufy *server* your account lives on), and a new optional `country` field
+  lets accounts registered outside those regions — e.g. AU — authenticate against the nearest
+  server while still identifying their real country. Leave `country` blank to use the region.
+- Removed a hard-coded device-serial fallback from the bridge; it now relies on auto-discovery
+  or the optional `station_sn` override.
+
+## 0.5.1
+
+- **Offline cameras no longer create dead "no feed" entities.** Discovery used to publish an
+  offline channel as a normal stream (the "offline" note was an inert comment), so the HA
+  integration made a green entity that 404'd on open. `gen_go2rtc.py` now skips status-0
+  cameras entirely; they're re-added automatically the next time discovery sees them online.
+- **Faster live-view open.** Shortened the transcode GOP from 25 to 12 frames. The feed runs
+  below 25 fps, so a keyframe now arrives every ~0.5-0.8s instead of ~1.5-2s, cutting the
+  per-open keyframe wait (on top of `keep_warm`, which removes the producer cold start).
+
+## 0.5.0
+
+- **Live view now actually plays.** The bridge transcodes the NVR's HEVC to **H.264**
+  (libx264 ultrafast/zerolatency, ~1s GOP) before publishing, so Home Assistant's browser
+  live view renders it. Previously the stream was raw H.265 (`-c:v copy`), which most
+  browsers can't play live — you'd get the snapshot thumbnail but "enlarge" never loaded.
+  This is the headline fix and is always on.
+- **Optional low-latency "keep-warm"** (`keep_warm`, default **off**). Holds each online
+  camera warm so opening live view is near-instant instead of waiting 5-13s for the WebRTC
+  cold start. It's **off by default** because it runs one continuous H.264 software encode
+  per online camera — only enable it on a host with CPU headroom (3-4 always-on encodes can
+  saturate a low-power Pi). The NVR itself streams all channels concurrently, so the NVR side
+  is fine; the cost is host CPU. Pair with `video_copy` for a cheap always-on warm.
+- **`video_copy` option** (default off). Publishes raw H.265 instead of transcoding — lower
+  CPU, but the live view is thumbnail-only. Replaces the undocumented `EUFY_VIDEO_COPY` env.
+- **Periodic re-login** (`token_refresh_hours`, default 6) refreshes `auth.json` so a warm
+  stream that drops can reconnect past the ~1-day eufy session-token lifetime.
+
+## 0.4.1
+
+- Fix: headless discovery (`--discover`) now exits when it completes, so the add-on
+  reliably moves on to start go2rtc instead of hanging (previously it could loop on
+  `STATS … video=0` and never start the streams).
+
+## 0.4.0
+
+- Headless **email/password login** — no more one-time token paste. On start the add-on
+  logs into the eufy passport, derives your NVR's `station_sn`, and writes `auth.json`.
+- Auto-discovers the NVR + cameras (cmd 9100) and serves each channel as RTSP/WebRTC via
+  a bundled, pinned go2rtc.
+- Add-on relocated to the repo root and `webui`/`watchdog` use the `[PORT:1984]`
+  placeholder so the Supervisor store lists it correctly.
