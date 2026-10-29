@@ -565,8 +565,8 @@
       "size": 5415
     },
     "tests/test_image_inventory.py": {
-      "sha256": "891fed880cf1bf1323c10f999e1ca1334d93ee9cec7cf850298bf993ad0e9773",
-      "size": 2082
+      "sha256": "2e673c18871a2d3c97e5f51ff357c4dfd1ee72178439cbcbf69eb3b9bdba4464",
+      "size": 2559
     },
     "tests/test_integration_unload.py": {
       "sha256": "87d5ee32f4bc20d54b469bc04747201723af1d310aaee38698c87e9e236cc813",
@@ -665,8 +665,8 @@
       "size": 2415
     },
     "tools/image_inventory.py": {
-      "sha256": "af5f2760fc15dc6ce85064077d423a398ea3f363559fed9ce2fc595fa22784dd",
-      "size": 5179
+      "sha256": "c72c10bea7cfa8e3c7cf2c65c0de36b46e2ea2f822f7c2107d0e68f2b7551d58",
+      "size": 5383
     },
     "tools/linux_candidate_smoke.py": {
       "sha256": "095f06abe8096d78bee4679bc29ce56abf5ccdbb81358a492f5719f5f3c8bf38",
