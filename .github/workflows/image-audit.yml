@@ -53,6 +53,74 @@ jobs:
           docker image inspect eufy-image-audit \
             --format '{{json .}}' > image-review/docker-image.json
           docker run --rm --network none --read-only \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 2 \
+            --mount "type=bind,source=$PWD/tools/image_inventory.py,target=/audit.py,readonly" \
+            --mount "type=bind,source=$PWD/image-review,target=/out" \
+            --entrypoint python3 eufy-image-audit /audit.py --output /out/software
+          printf '%s\n' "$GITHUB_SHA" > image-review/source-revision.txt
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: image-review-${{ matrix.arch }}
+          path: image-review/
+          if-no-files-found: error
+          retention-days: 14
+name: Prebuilt image audit
+
+on:
+  push:
+    branches: [codex/prebuilt-image-audit]
+  pull_request:
+    paths:
+      - 'eufy_nvr/**'
+      - 'tools/image_inventory.py'
+      - '.github/workflows/image-audit.yml'
+  workflow_dispatch:
+
+# Build and review only. No registry login, package write permission or image push.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the unchanged app, labelled with this exact source revision
+        run: |
+          docker build --tag eufy-image-audit \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --file eufy_nvr/Dockerfile eufy_nvr
+      - name: Test imports and native transport without networking
+        run: |
+          docker run --rm --network none --entrypoint python3 eufy-image-audit \
+            -c 'import av, aiortc, guided_launcher, setup_web, startup_controller'
+          docker run --rm --network none --entrypoint node eufy-image-audit \
+            /opt/eufy/bridge/sctp_oracle.js selftest
+      - name: Test Linux worker lifecycle using synthetic state only
+        run: |
+          docker run --rm --init --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 2 \
+            --mount "type=bind,source=$PWD/tools/linux_candidate_smoke.py,target=/smoke.py,readonly" \
+            --entrypoint python3 eufy-image-audit /smoke.py
+      - name: Collect public software inventory and installed notices
+        run: |
+          mkdir image-review
+          docker image inspect eufy-image-audit \
+            --format '{{json .}}' > image-review/docker-image.json
+          docker run --rm --network none --read-only \
             --cap-drop ALL --security-opt no-new-privileges \
             --pids-limit 64 --memory 512m --cpus 2 \
             --mount "type=bind,source=$PWD/tools/image_inventory.py,target=/audit.py,readonly" \
