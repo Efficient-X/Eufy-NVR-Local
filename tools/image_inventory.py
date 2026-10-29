@@ -14,6 +14,7 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+from urllib.parse import quote
 
 
 NOTICE_ROOTS = (
@@ -39,13 +40,15 @@ def copy_notice(source: Path, output: Path, label: str,
         raise ValueError('Notice is outside the public software directories')
     if '/' in label or '\\' in label or label in ('', '.', '..'):
         raise ValueError('Invalid notice label')
-    destination = output / 'notices' / label
+    # Debian multiarch names contain ':'; preserve them in metadata but encode
+    # notice filenames for GitHub artifacts and Windows filesystems.
+    destination = output / 'notices' / quote(label, safe='._-')
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(resolved, destination)
     with destination.open('rb') as handle:
         digest = hashlib.file_digest(handle, 'sha256').hexdigest()
     return {
-        'file': str(destination.relative_to(output)),
+        'file': destination.relative_to(output).as_posix(),
         'sha256': digest,
     }
 
