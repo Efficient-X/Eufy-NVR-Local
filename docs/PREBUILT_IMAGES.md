@@ -50,6 +50,27 @@ the media libraries; they do not prove real account or live-camera behaviour.
 The source-only installation remains available while these steps are completed.
 No household credentials, backups or camera pictures belong in image evidence.
 
+## Source collection audit
+
+The separate `Image source collection audit` builds the candidate on each native
+architecture. It checks the installed packages against that image's inventory
+before collecting the exact Debian source versions through signed official APT
+indexes, and Python source distributions through official PyPI SHA-256 metadata.
+It also reads PyAV's pinned FFmpeg build recipe as data and downloads its source
+inputs using the recipe's hashes. Downloaded source code is never executed.
+
+This command belongs only in a disposable CI container. It rejects HA data/config
+mounts, changes only that container's temporary APT indexes, and receives no Eufy
+account or household configuration. The workflow token has read access only.
+
+The report retains missing versions and explicitly lists the remaining review:
+Go dependency notices, base-overlay components, and other libraries/Rust crates
+inside Python wheels. Collecting Debian/Python archives alone does not satisfy
+those additional requirements. The report remains `distribution_review: pending`.
+Any missing or changed archive fails the audit. Three-day CI artifacts are review
+evidence only; final source and notice assets must be retained with the release
+before an image is advertised for installation.
+
 References: [HA image configuration](https://contributors.home-assistant.io/apps/reference/configuration/#image),
 [Supervisor image export](https://github.com/home-assistant/supervisor/blob/2026.10.4/supervisor/apps/app.py),
 [PyAV 17.1.0 recipe](https://github.com/PyAV-Org/PyAV/blob/v17.1.0/scripts/ffmpeg-8.1.json).
