@@ -1,5 +1,5 @@
 ARG BUILD_FROM="ghcr.io/home-assistant/base-debian:bookworm@sha256:60cd882d5200157082e568a0b775cca0d9cb5704452ada3cf6f206c4dd6d83c5"
-FROM ${BUILD_FROM} AS legacy
+FROM ${BUILD_FROM} AS build
 
 ARG GO2RTC_VERSION="v1.9.14"
 ARG GO2RTC_SHA256_AMD64="32d616af226bd731678ffde328b94cfb94e30339bfefc469cfb76323144615a6"
@@ -88,6 +88,34 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/1985' || exit 1
 
 WORKDIR /opt/eufy/bridge
+CMD [ "/run.sh" ]
+
+# Keep compilers, headers, npm and build dependencies out of the shipped image.
+# Copy the exact already-tested Python wheels and bridge from the build stage;
+# do not resolve Python dependencies again in the runtime stage.
+FROM ${BUILD_FROM} AS legacy
+
+LABEL org.opencontainers.image.title="Eufy NVR Local" \
+    org.opencontainers.image.description="Local eufy S4/T8N00 WebRTC to RTSP bridge for Home Assistant" \
+    org.opencontainers.image.source="https://github.com/Efficient-X/Eufy-NVR-Local"
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ENV LANG=C.UTF-8 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 AV_LOG_FORCE_NOCOLOR=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3 nodejs ffmpeg ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && if [ ! -e /usr/bin/python ]; then ln -s /usr/bin/python3 /usr/bin/python; fi
+
+COPY --from=build /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
+COPY --from=build /opt/eufy/bridge /opt/eufy/bridge
+COPY --from=build /usr/share/doc/eufy-nvr /usr/share/doc/eufy-nvr
+COPY --from=build /run.sh /run.sh
+
+WORKDIR /opt/eufy/bridge
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/1985' || exit 1
 CMD [ "/run.sh" ]
 
 # Guided setup startup stage. The final release stage below chooses the default;
