@@ -88,7 +88,8 @@ jobs:
       - name: Record built dependency versions for distribution review
         run: |
           docker run --rm --network none --entrypoint dpkg-query eufy-guided-test -W
-          docker run --rm --network none --entrypoint python3 eufy-guided-test -m pip list --format=json
+          docker run --rm --network none --entrypoint python3 eufy-guided-test \
+            -c "import importlib.metadata as m, json; print(json.dumps([{'name': d.metadata['Name'], 'version': d.version} for d in m.distributions()]))"
       - name: Check the image's S6 stop path (synthetic worker only)
         run: |
           cid="$(docker run --detach --network none --pids-limit 64 --memory 512m --cpus 2 \
