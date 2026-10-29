@@ -20,6 +20,7 @@ SOURCE_FILES = (
     '.github/FUNDING.yml',
     '.github/workflows/ci.yml',
     '.github/workflows/image-audit.yml',
+    '.github/workflows/source-audit.yml',
     '.github/workflows/hardening-tests.yml',
     '.gitignore',
     'LICENSE',
@@ -168,6 +169,7 @@ SOURCE_FILES = (
     'tests/test_ptcs_transport.mjs',
     'tests/test_public_package.py',
     'tests/test_image_inventory.py',
+    'tests/test_image_sources.py',
     'tests/test_regions.py',
     'tests/test_release_packaging.py',
     'tests/test_remembered_login.py',
@@ -188,6 +190,7 @@ SOURCE_FILES = (
     'tools/stage_public_repository.py',
     'tools/verify_candidate.py',
     'tools/image_inventory.py',
+    'tools/image_sources.py',
     'tools/image_video_smoke.py',
 )
 
