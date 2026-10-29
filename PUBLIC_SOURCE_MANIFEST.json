@@ -17,8 +17,8 @@
       "size": 846
     },
     ".github/workflows/image-audit.yml": {
-      "sha256": "fab51d674935ff31bf516e7d4ec73c868981a3c953bcd91127337e4b081525ca",
-      "size": 2826
+      "sha256": "e06d4cbf152284ef8ee5e4abd1963863aea07aa5b82fe696e9bdc7980237e0e9",
+      "size": 3310
     },
     ".gitignore": {
       "sha256": "bdef3e9b343ba31d98c8eb96dac66e2140dd814c109dcbbe5cff55c13c083150",
@@ -245,8 +245,8 @@
       "size": 11505
     },
     "docs/PREBUILT_IMAGES.md": {
-      "sha256": "e5960cf367271532cfd74879de0d53b64b6f130e15d949567d46f01fe49b3a18",
-      "size": 3216
+      "sha256": "810f26469c6cb1d9e63afb48f52385c24000cc63b1ccb81e1781e3a144063ad8",
+      "size": 3615
     },
     "docs/PROTOCOL.md": {
       "sha256": "d68d316fce54d4d2c3cec7fe459809fb2d48f8bcecffec62787bcc68b73be04e",
@@ -277,8 +277,8 @@
       "size": 16453
     },
     "eufy_nvr/Dockerfile": {
-      "sha256": "2d613de4a94c9ddafc50732a3e108e8f3a1eac4c6e53a1cb56869ef86d5368db",
-      "size": 3729
+      "sha256": "79843d00cf3a93d17c1259ac22f502a3477a1f52a0134d39718d93aa9a77946b",
+      "size": 5028
     },
     "eufy_nvr/THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -431,6 +431,10 @@
     "eufy_nvr/guided-entry.sh": {
       "sha256": "cdd37d4e4e5b7ba2124cff8f935302a90e3ae040237e106118f4b7f1c457356b",
       "size": 823
+    },
+    "eufy_nvr/licenses/EFX-MIT-LICENSE.txt": {
+      "sha256": "6c0610cbf18cdd237a8e2ef3e194ec68f52df3ad39f96dae783ff02c5d6a6700",
+      "size": 1065
     },
     "eufy_nvr/licenses/eufy-sdk-APACHE-2.0.txt": {
       "sha256": "95b791c3b452823fe2b67de33893e4d0edc96ef6e2ce548ae78129c0f1a6ced5",
@@ -668,17 +672,21 @@
       "sha256": "c72c10bea7cfa8e3c7cf2c65c0de36b46e2ea2f822f7c2107d0e68f2b7551d58",
       "size": 5383
     },
+    "tools/image_video_smoke.py": {
+      "sha256": "e36393b75c7d7ff4e2541c93aad550b73a904a52c7f49c781860f8ee01429e5b",
+      "size": 2253
+    },
     "tools/linux_candidate_smoke.py": {
       "sha256": "095f06abe8096d78bee4679bc29ce56abf5ccdbb81358a492f5719f5f3c8bf38",
       "size": 9824
     },
     "tools/stage_guided_candidate.py": {
-      "sha256": "a865be9fbbca470f878bea5f05d933f63234c3d27c0f5961a892a67d05d78dd8",
-      "size": 9980
+      "sha256": "e277e64d2db2d47ac4d50fd30ba3350af1807857684a1c077e6f1ea57e597379",
+      "size": 10049
     },
     "tools/stage_public_repository.py": {
-      "sha256": "8d45fd10b13ac277eb19310b860cf2a21fafae8f8e4e8ed9211764d9969063fb",
-      "size": 11750
+      "sha256": "48e9b86cff70ab3687a4a015effc0cfe14b926f8f5a204d20f195474f63ff378",
+      "size": 11829
     },
     "tools/verify_candidate.py": {
       "sha256": "d83b5609a20b610f7031433b7ce4ceff1573996df9fbed2003853ddd821fb28e",
