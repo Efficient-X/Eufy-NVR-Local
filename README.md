@@ -11,6 +11,10 @@ The new licensed protocol implementation has passed synthetic and Linux build
 checks; real owner sign-in, fresh Supervisor setup, ARM and live-camera acceptance
 are still outstanding. Keep a working installation until a migration is tested.
 
+Downloadable app images are being prepared to reduce repeated software in HA
+backups. The [image build and acceptance plan](docs/PREBUILT_IMAGES.md) explains
+the checks; no prebuilt image is published yet.
+
 ## What it does
 
 - Makes the NVR's feeds available to Home Assistant through go2rtc.
