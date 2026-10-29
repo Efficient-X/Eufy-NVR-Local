@@ -55,3 +55,14 @@ def test_inventory_refuses_to_overwrite_existing_evidence(tmp_path):
     output.mkdir()
     with pytest.raises(FileExistsError):
         audit.inventory(output)
+
+
+def test_multiarch_notice_name_is_portable_without_changing_contents(tmp_path):
+    public = tmp_path / 'public'
+    public.mkdir()
+    notice = public / 'copyright'
+    notice.write_bytes(b'Debian licence fixture\n')
+    output = tmp_path / 'review'
+    entry = audit.copy_notice(notice, output, 'debian-libc6:amd64.txt', roots=(public,))
+    assert entry['file'] == 'notices/debian-libc6%3Aamd64.txt'
+    assert (output / entry['file']).read_bytes() == notice.read_bytes()
