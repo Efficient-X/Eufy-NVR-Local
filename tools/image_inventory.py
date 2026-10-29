@@ -53,6 +53,32 @@ def copy_notice(source: Path, output: Path, label: str,
     }
 
 
+def python_metadata_kind(relative: Path) -> str | None:
+    """Classify public distribution metadata without collecting bytecode."""
+    parts = tuple(part.lower() for part in relative.parts)
+    if not any(part.endswith(('.dist-info', '.egg-info')) for part in parts):
+        return None
+    filename = relative.name.lower()
+    if 'sboms' in parts and filename.endswith('.json'):
+        return 'sbom'
+    if relative.suffix.lower() in ('.py', '.pyc', '.pyo'):
+        return None
+    if 'licenses' in parts or filename.startswith(('license', 'copying', 'notice')):
+        return 'notice'
+    return None
+
+
+def native_file_record(path: Path, relative: Path) -> dict:
+    resolved = path.resolve(strict=True)
+    if not resolved.is_file() or not any(
+        resolved.is_relative_to(root.resolve()) for root in NOTICE_ROOTS
+    ):
+        raise ValueError('Native library is outside the public software directories')
+    with resolved.open('rb') as handle:
+        digest = hashlib.file_digest(handle, 'sha256').hexdigest()
+    return dict(file=relative.as_posix(), size=resolved.stat().st_size, sha256=digest)
+
+
 def inventory(output: Path) -> dict:
     output.mkdir(parents=True, exist_ok=False)
     report = {
@@ -80,20 +106,21 @@ def inventory(output: Path) -> dict:
     for dist in sorted(importlib.metadata.distributions(),
                        key=lambda d: d.metadata.get('Name', '').lower()):
         name = dist.metadata['Name']
-        record = {'name': name, 'version': dist.version, 'notices': []}
+        record = {'name': name, 'version': dist.version, 'notices': [],
+                  'sboms': [], 'native_files': []}
         for index, relative in enumerate(dist.files or ()):
-            parts = tuple(part.lower() for part in relative.parts)
             filename = relative.name.lower()
             # Only installed distribution licence metadata, not arbitrary
             # package files or application configuration.
-            if any(part.endswith('.dist-info') or part.endswith('.egg-info')
-                   for part in parts) and (
-                'licenses' in parts or filename.startswith(('license', 'copying', 'notice'))
-            ):
-                record['notices'].append(copy_notice(
+            kind = python_metadata_kind(relative)
+            if kind:
+                record['sboms' if kind == 'sbom' else 'notices'].append(copy_notice(
                     Path(dist.locate_file(relative)), output,
-                    f'python-{name}-{index}.txt',
+                    f'python-{name}-{index}.' + ('json' if kind == 'sbom' else 'txt'),
                 ))
+            if '.so' in filename or filename.endswith(('.dll', '.pyd')):
+                record['native_files'].append(native_file_record(
+                    Path(dist.locate_file(relative)), relative))
         if not record['notices']:
             report['missing_notices'].append(f'python:{name}')
         report['python'].append(record)

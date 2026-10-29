@@ -66,3 +66,19 @@ def test_multiarch_notice_name_is_portable_without_changing_contents(tmp_path):
     entry = audit.copy_notice(notice, output, 'debian-libc6:amd64.txt', roots=(public,))
     assert entry['file'] == 'notices/debian-libc6%3Aamd64.txt'
     assert (output / entry['file']).read_bytes() == notice.read_bytes()
+
+
+def test_python_metadata_includes_sbom_but_excludes_authors_code_and_bytecode():
+    assert audit.python_metadata_kind(Path('av.dist-info/sboms/auditwheel.cdx.json')) == 'sbom'
+    assert audit.python_metadata_kind(Path('av.dist-info/licenses/LICENSE.txt')) == 'notice'
+    assert audit.python_metadata_kind(Path('av.dist-info/licenses/AUTHORS.rst')) == 'notice'
+    assert audit.python_metadata_kind(Path('av.dist-info/licenses/AUTHORS.py')) is None
+    assert audit.python_metadata_kind(Path('av.dist-info/licenses/__pycache__/AUTHORS.pyc')) is None
+    assert audit.python_metadata_kind(Path('private/options.json')) is None
+
+
+def test_native_file_hash_refuses_a_private_path(tmp_path):
+    private = tmp_path / 'settings.so'
+    private.write_text('private fixture')
+    with pytest.raises(ValueError, match='outside'):
+        audit.native_file_record(private, Path('settings.so'))
