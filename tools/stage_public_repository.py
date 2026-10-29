@@ -127,6 +127,7 @@ SOURCE_FILES = (
     'eufy_nvr/licenses/eufy-sdk-APACHE-2.0.txt',
     'eufy_nvr/licenses/eufy-sdk-PROVENANCE.md',
     'eufy_nvr/licenses/go2rtc-LICENSE.txt',
+    'eufy_nvr/licenses/EFX-MIT-LICENSE.txt',
     'eufy_nvr/run.sh',
     'frontend/README.md',
     'frontend/eufy-shared-tiles.js',
@@ -187,6 +188,7 @@ SOURCE_FILES = (
     'tools/stage_public_repository.py',
     'tools/verify_candidate.py',
     'tools/image_inventory.py',
+    'tools/image_video_smoke.py',
 )
 
 
