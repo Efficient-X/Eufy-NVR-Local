@@ -9,8 +9,8 @@
       "size": 28
     },
     ".github/workflows/ci.yml": {
-      "sha256": "ba2a57061cb8a221ef11914a8227ea60180fbbc3c635072b6a5b3986d4ce685d",
-      "size": 4457
+      "sha256": "d19b8c253c51f906a9c3b1b109bf738bccce1359fcf1af9b6d96f4a0504722a7",
+      "size": 4587
     },
     ".github/workflows/hardening-tests.yml": {
       "sha256": "13157f16dc354995a241da8f03f604710713d644d5efee9fd3631eeecf5678cd",
