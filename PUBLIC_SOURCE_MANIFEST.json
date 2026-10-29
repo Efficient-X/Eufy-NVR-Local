@@ -17,8 +17,8 @@
       "size": 846
     },
     ".github/workflows/image-audit.yml": {
-      "sha256": "3da34961b9383cde058194b458afbe00c3dbead7480c7711be73904841ff91ee",
-      "size": 2785
+      "sha256": "fab51d674935ff31bf516e7d4ec73c868981a3c953bcd91127337e4b081525ca",
+      "size": 2826
     },
     ".gitignore": {
       "sha256": "bdef3e9b343ba31d98c8eb96dac66e2140dd814c109dcbbe5cff55c13c083150",
