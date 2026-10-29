@@ -19,6 +19,7 @@ SOURCE_FILES = (
     '.gitattributes',
     '.github/FUNDING.yml',
     '.github/workflows/ci.yml',
+    '.github/workflows/image-audit.yml',
     '.github/workflows/hardening-tests.yml',
     '.gitignore',
     'LICENSE',
@@ -78,6 +79,7 @@ SOURCE_FILES = (
     'docs/GUIDED_CANDIDATE.md',
     'docs/PROTOCOL.md',
     'docs/PUBLISHING.md',
+    'docs/PREBUILT_IMAGES.md',
     'docs/RELEASE_ACCEPTANCE.md',
     'docs/SETUP_GUIDE.md',
     'eufy_nvr/.dockerignore',
@@ -164,6 +166,7 @@ SOURCE_FILES = (
     'tests/test_protocol_release_hardening.py',
     'tests/test_ptcs_transport.mjs',
     'tests/test_public_package.py',
+    'tests/test_image_inventory.py',
     'tests/test_regions.py',
     'tests/test_release_packaging.py',
     'tests/test_remembered_login.py',
@@ -183,6 +186,7 @@ SOURCE_FILES = (
     'tools/stage_guided_candidate.py',
     'tools/stage_public_repository.py',
     'tools/verify_candidate.py',
+    'tools/image_inventory.py',
 )
 
 
