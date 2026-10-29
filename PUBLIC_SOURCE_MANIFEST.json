@@ -16,6 +16,10 @@
       "sha256": "13157f16dc354995a241da8f03f604710713d644d5efee9fd3631eeecf5678cd",
       "size": 846
     },
+    ".github/workflows/image-audit.yml": {
+      "sha256": "3da34961b9383cde058194b458afbe00c3dbead7480c7711be73904841ff91ee",
+      "size": 2785
+    },
     ".gitignore": {
       "sha256": "bdef3e9b343ba31d98c8eb96dac66e2140dd814c109dcbbe5cff55c13c083150",
       "size": 735
@@ -25,8 +29,8 @@
       "size": 1086
     },
     "README.md": {
-      "sha256": "1b23f0d906154f0a1ee08d44f5d1e921882b129b2180830ae2476cac0ae44d28",
-      "size": 5858
+      "sha256": "f7a90cf6779410fc610314d84154b22a8af82066d2af17c76f1b20a0b1e7fbc9",
+      "size": 6065
     },
     "THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -239,6 +243,10 @@
     "docs/GUIDED_CANDIDATE.md": {
       "sha256": "c9b5430ca9cb9330bfab0e70bea23fa08af666f9b56d28417640e542a140f4e5",
       "size": 11505
+    },
+    "docs/PREBUILT_IMAGES.md": {
+      "sha256": "e5960cf367271532cfd74879de0d53b64b6f130e15d949567d46f01fe49b3a18",
+      "size": 3216
     },
     "docs/PROTOCOL.md": {
       "sha256": "d68d316fce54d4d2c3cec7fe459809fb2d48f8bcecffec62787bcc68b73be04e",
@@ -556,6 +564,10 @@
       "sha256": "8083c76e2502d3eba055c9122698c550871a6606d19d53941191240905967ec6",
       "size": 5415
     },
+    "tests/test_image_inventory.py": {
+      "sha256": "891fed880cf1bf1323c10f999e1ca1334d93ee9cec7cf850298bf993ad0e9773",
+      "size": 2082
+    },
     "tests/test_integration_unload.py": {
       "sha256": "87d5ee32f4bc20d54b469bc04747201723af1d310aaee38698c87e9e236cc813",
       "size": 2361
@@ -652,6 +664,10 @@
       "sha256": "0fbeb0d45dcf7b052d0a7c941ff5992e92f86c5c7f2fb72bd067e05c63502637",
       "size": 2415
     },
+    "tools/image_inventory.py": {
+      "sha256": "af5f2760fc15dc6ce85064077d423a398ea3f363559fed9ce2fc595fa22784dd",
+      "size": 5179
+    },
     "tools/linux_candidate_smoke.py": {
       "sha256": "095f06abe8096d78bee4679bc29ce56abf5ccdbb81358a492f5719f5f3c8bf38",
       "size": 9824
@@ -661,8 +677,8 @@
       "size": 9980
     },
     "tools/stage_public_repository.py": {
-      "sha256": "6e2cb5619066e02c6cecf686ce469f45118f77bc916de91c2e25d5b2fec260dd",
-      "size": 11609
+      "sha256": "8d45fd10b13ac277eb19310b860cf2a21fafae8f8e4e8ed9211764d9969063fb",
+      "size": 11750
     },
     "tools/verify_candidate.py": {
       "sha256": "d83b5609a20b610f7031433b7ce4ceff1573996df9fbed2003853ddd821fb28e",
