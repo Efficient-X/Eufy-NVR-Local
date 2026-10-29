@@ -18,6 +18,12 @@ setting, or alter an installation. Its read-only GitHub token cannot publish
 packages. The resulting evidence explicitly says `distribution_review: pending`
 and `hardware_acceptance: not_tested`; passing a build must not erase those gaps.
 
+The runtime stage keeps the bridge, pinned Python packages, Node, FFmpeg and HA
+startup tooling. Compilers and development headers stay in the build stage.
+Synthetic H.264/H.265 video and Opus/AAC audio are encoded by the installed FFmpeg
+CLI and decoded by the installed PyAV, on both architectures. These checks guard
+the media libraries; they do not prove real account or live-camera behaviour.
+
 ## Before the first downloadable image
 
 1. Review both architecture inventories. Preserve the actual Debian, Python,
