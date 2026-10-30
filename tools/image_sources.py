@@ -23,6 +23,14 @@ from urllib.request import Request, urlopen
 PYAV_RECIPE_COMMIT = 'b84838a003b1626152ef530750d5c3e0022c3db9'
 PYAV_RECIPE_SHA256 = '40bdee1f7cc76667f0b7a3da5198d08c4fe79e6ab571cf1e1b5ee856f58128b3'
 MAX_DOWNLOAD = 512 * 1024 * 1024
+ALMA_SOURCE_RPMS = {
+    ('libXau', '1.0.9-3.el8'): ('libXau-1.0.9-3.el8.src.rpm',
+                              'f9e5775417473caa6b5699171eec64253ef90473f36f0efe81d020b52a5de49a'),
+    ('libdrm', '2.4.115-2.el8'): ('libdrm-2.4.115-2.el8.src.rpm',
+                                '263d4053cbfcce2df8dc255ccc35303c1c7bac8e9dd281f3dee300de7d556251'),
+    ('libxcb', '1.13.1-1.el8'): ('libxcb-1.13.1-1.el8.src.rpm',
+                               'baa73f081a3752cedf538c6612583ef3dbfdea534a95537013b2555dddbf75e9'),
+}
 
 
 def sha256(path: Path) -> str:
@@ -143,6 +151,7 @@ def sbom_sources(bom: dict) -> list[dict]:
     for component in bom.get('components', []):
         name, version = component['name'], component['version']
         purl = component.get('purl', '')
+        source_hash = None
         if purl.startswith('pkg:cargo/cryptography-') and '?download_url=file://' in purl:
             continue  # Workspace source is inside the cryptography source distribution.
         if purl == f'pkg:cargo/{name}@{version}':
@@ -159,10 +168,17 @@ def sbom_sources(bom: dict) -> list[dict]:
             if not any(item.get('type') == 'distribution' and item.get('url') == url
                        for item in references):
                 raise ValueError('OpenSSL SBOM does not reference the expected source')
+        elif purl == f'pkg:rpm/almalinux/{name}@{version}':
+            if (name, version) not in ALMA_SOURCE_RPMS:
+                raise ValueError('Review the new AlmaLinux source dependency')
+            filename, source_hash = ALMA_SOURCE_RPMS[(name, version)]
+            url = 'https://repo.almalinux.org/vault/8.10/AppStream/Source/Packages/' + filename
         else:
             continue  # RPM/system metadata remains separately visible in the inventory.
-        hashes = [item['content'] for item in component.get('hashes', [])
-                  if item.get('alg') == 'SHA-256']
+        # RPM SBOM hashes describe bundled binaries, not their source RPM.
+        # Use independently reviewed source hashes for those three packages.
+        hashes = [source_hash] if source_hash else [item['content']
+                  for item in component.get('hashes', []) if item.get('alg') == 'SHA-256']
         if len(hashes) != 1 or not re.fullmatch('[0-9a-f]{64}', hashes[0]):
             raise ValueError('Native source has no unambiguous SHA-256')
         result.append(dict(name=name, version=version, filename=filename,
