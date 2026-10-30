@@ -13,7 +13,7 @@ import yaml
 import stage_guided_candidate as guided
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0-alpha.1"
+VERSION = "0.8.0-alpha.2"
 MANIFEST = "PUBLIC_SOURCE_MANIFEST.json"
 SOURCE_FILES = (
     '.gitattributes',
