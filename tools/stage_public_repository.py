@@ -170,6 +170,7 @@ SOURCE_FILES = (
     'tests/test_public_package.py',
     'tests/test_image_inventory.py',
     'tests/test_image_sources.py',
+    'tests/test_source_release_tools.py',
     'tests/test_regions.py',
     'tests/test_release_packaging.py',
     'tests/test_remembered_login.py',
@@ -191,6 +192,8 @@ SOURCE_FILES = (
     'tools/verify_candidate.py',
     'tools/image_inventory.py',
     'tools/image_sources.py',
+    'tools/extra_image_sources.py',
+    'tools/source_bundle.py',
     'tools/image_video_smoke.py',
 )
 

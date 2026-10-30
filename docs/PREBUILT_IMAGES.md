@@ -71,6 +71,21 @@ Any missing or changed archive fails the audit. Three-day CI artifacts are revie
 evidence only; final source and notice assets must be retained with the release
 before an image is advertised for installation.
 
+Supplemental collection uses the wheels' own SBOM hashes for registry Rust crates
+and OpenSSL source archives. Go programs are inspected without being executed:
+their embedded clean Git revision must match the pinned upstream source. The
+collector vendors their Go modules, verifies that go.mod/go.sum did not change,
+and saves the matching Go toolchain source. The pinned HA base, Bashio, S6 overlay
+and PyAV FFmpeg build recipes are also retained. Only disposable CI containers
+and public upstream repositories are used; the NVR app is never started.
+
+Source evidence is split into parts of at most 400 MiB with SHA-256 hashes for
+each part and the joined tar archive. A separate small artifact keeps the reports,
+notices and inventory. This avoids making reviewers download a single oversized
+artifact. CI artifacts still expire: release publication must preserve the parts,
+their manifest and matching notices as permanent release assets. Normal app users
+will not need these developer/source archives to install the app.
+
 References: [HA image configuration](https://contributors.home-assistant.io/apps/reference/configuration/#image),
 [Supervisor image export](https://github.com/home-assistant/supervisor/blob/2026.10.4/supervisor/apps/app.py),
 [PyAV 17.1.0 recipe](https://github.com/PyAV-Org/PyAV/blob/v17.1.0/scripts/ffmpeg-8.1.json).

@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'tools/image_sources.py'
+      - 'tools/extra_image_sources.py'
+      - 'tools/source_bundle.py'
       - '.github/workflows/source-audit.yml'
   workflow_dispatch:
 
@@ -22,7 +24,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: aarch64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the exact candidate
@@ -50,12 +52,56 @@ jobs:
             --entrypoint python3 eufy-source-audit /sources.py \
               --inventory /out/software/inventory.json --output /out/sources \
               --source-revision "$GITHUB_SHA"
-      - name: Preserve software evidence even if a source is unavailable
+      - name: Collect Go and base-image source and notices without starting the app
+        run: python3 tools/extra_image_sources.py --output source-review/upstream
+      - name: Package sources into downloadable parts with whole-archive and part hashes
+        run: |
+          python3 tools/source_bundle.py --source source-review --output source-parts \
+            --architecture "${{ matrix.arch }}" --source-revision "$GITHUB_SHA"
+          python3 -c "import json, pathlib; p = next(pathlib.Path('source-parts').glob('*.json')); assert len(json.loads(p.read_text())['parts']) <= 4, 'Review source growth before adding more parts'"
+      - name: Preserve the small reports and installed software notices
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: source-review-${{ matrix.arch }}
-          path: source-review/
+          name: source-summary-${{ matrix.arch }}
+          path: |
+            source-review/docker-image.json
+            source-review/source-revision.txt
+            source-review/software/
+            source-review/sources/source-report.json
+            source-review/upstream/upstream-report.json
+            source-parts/*.json
           if-no-files-found: error
+          retention-days: 7
+      - name: Preserve source archive part 00
+        if: ${{ always() && hashFiles('source-parts/*.part00') != '' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: sources-${{ matrix.arch }}-part00
+          path: source-parts/*.part00
           compression-level: 0
-          retention-days: 3
+          retention-days: 7
+      - name: Preserve source archive part 01
+        if: ${{ always() && hashFiles('source-parts/*.part01') != '' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: sources-${{ matrix.arch }}-part01
+          path: source-parts/*.part01
+          compression-level: 0
+          retention-days: 7
+      - name: Preserve source archive part 02
+        if: ${{ always() && hashFiles('source-parts/*.part02') != '' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: sources-${{ matrix.arch }}-part02
+          path: source-parts/*.part02
+          compression-level: 0
+          retention-days: 7
+      - name: Preserve source archive part 03
+        if: ${{ always() && hashFiles('source-parts/*.part03') != '' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: sources-${{ matrix.arch }}-part03
+          path: source-parts/*.part03
+          compression-level: 0
+          retention-days: 7
