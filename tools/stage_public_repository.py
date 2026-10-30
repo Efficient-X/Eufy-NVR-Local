@@ -193,6 +193,7 @@ SOURCE_FILES = (
     'tools/image_inventory.py',
     'tools/image_sources.py',
     'tools/extra_image_sources.py',
+    'tools/overlay_source_inputs.json',
     'tools/source_bundle.py',
     'tools/image_video_smoke.py',
 )
