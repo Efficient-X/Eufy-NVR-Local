@@ -137,6 +137,62 @@ def recipe_sources(text: str) -> list[dict]:
     return sorted(sources, key=lambda item: item['name'])
 
 
+def sbom_sources(bom: dict) -> list[dict]:
+    """Resolve only registry crates and the official OpenSSL source archive."""
+    result = []
+    for component in bom.get('components', []):
+        name, version = component['name'], component['version']
+        purl = component.get('purl', '')
+        if purl.startswith('pkg:cargo/cryptography-') and '?download_url=file://' in purl:
+            continue  # Workspace source is inside the cryptography source distribution.
+        if purl == f'pkg:cargo/{name}@{version}':
+            if not re.fullmatch('[A-Za-z0-9_-]+', name) or not re.fullmatch('[0-9A-Za-z.+-]+', version):
+                raise ValueError('Unsafe Cargo source identity')
+            url = f'https://static.crates.io/crates/{name}/{name}-{version}.crate'
+            filename = f'{name}-{version}.crate'
+        elif name == 'openssl' and purl.startswith('pkg:generic/openssl@'):
+            if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+                raise ValueError('Unsafe OpenSSL source version')
+            filename = f'openssl-{version}.tar.gz'
+            url = f'https://github.com/openssl/openssl/releases/download/openssl-{version}/{filename}'
+            references = component.get('externalReferences', [])
+            if not any(item.get('type') == 'distribution' and item.get('url') == url
+                       for item in references):
+                raise ValueError('OpenSSL SBOM does not reference the expected source')
+        else:
+            continue  # RPM/system metadata remains separately visible in the inventory.
+        hashes = [item['content'] for item in component.get('hashes', [])
+                  if item.get('alg') == 'SHA-256']
+        if len(hashes) != 1 or not re.fullmatch('[0-9a-f]{64}', hashes[0]):
+            raise ValueError('Native source has no unambiguous SHA-256')
+        result.append(dict(name=name, version=version, filename=filename,
+                           url=url, sha256=hashes[0], licenses=component.get('licenses', [])))
+    return result
+
+
+def collect_sbom_sources(inventory: dict, metadata_root: Path, output: Path) -> list[dict]:
+    sources = {}
+    root = metadata_root.resolve(strict=True)
+    for package in inventory['python']:
+        for entry in package.get('sboms', []):
+            path = (root / entry['file']).resolve(strict=True)
+            if not path.is_relative_to(root) or not path.is_file() or sha256(path) != entry['sha256']:
+                raise ValueError('SBOM differs from the reviewed public metadata')
+            for source in sbom_sources(json.loads(path.read_text())):
+                key = (source['name'], source['version'])
+                if key in sources and sources[key]['sha256'] != source['sha256']:
+                    raise ValueError('Native source identities have conflicting hashes')
+                sources[key] = source
+    records = []
+    for key in sorted(sources):
+        source = sources[key]
+        path = output / source['filename']
+        download(source['url'], path, source['sha256'])
+        source['file'] = path.relative_to(output).as_posix()
+        records.append(source)
+    return records
+
+
 def installed_packages() -> tuple[list[dict], list[dict]]:
     result = subprocess.run(
         ['dpkg-query', '-W', '-f',
@@ -215,14 +271,14 @@ def debian_sources(inventory: dict, output: Path) -> list[dict]:
     return records
 
 
-def collect(inventory: dict, output: Path, source_revision: str) -> dict:
+def collect(inventory: dict, output: Path, source_revision: str, metadata_root: Path) -> dict:
     if not re.fullmatch('[0-9a-f]{40}', source_revision):
         raise ValueError('An exact source commit is required')
     verify_installed(inventory)
     output.mkdir(parents=True, exist_ok=False)
     report = dict(schema=1, source_revision=source_revision,
                   distribution_review='pending', hardware_acceptance='not_tested',
-                  debian=[], python=[], pyav_recipe=[], failures=[])
+                  debian=[], python=[], pyav_recipe=[], wheel_sources=[], failures=[])
     # Write progress even when the network or one archive is unavailable.
     def save():
         (output / 'source-report.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -256,6 +312,8 @@ def collect(inventory: dict, output: Path, source_revision: str) -> dict:
             source['file'] = path.relative_to(output).as_posix()
             report['pyav_recipe'].append(source)
             save()
+        report['wheel_sources'] = collect_sbom_sources(inventory, metadata_root, output / 'wheel-sources')
+        save()
         common = Path('/usr/share/common-licenses')
         for path in sorted(common.iterdir()):
             resolved = path.resolve(strict=True)
@@ -274,7 +332,7 @@ def collect(inventory: dict, output: Path, source_revision: str) -> dict:
         report['remaining_review'] = [
             'Go binary dependency sources/notices and exact toolchain metadata',
             'HA base overlay components and their build recipes',
-            'Other native libraries bundled inside Python wheels and Rust crates',
+            'Native-wheel libraries absent from an upstream SBOM, and RPM notice coverage',
             'Permanent release assets accompanying any distributed image',
         ]
         save()
@@ -295,10 +353,12 @@ def main() -> None:
         parser.error('Run only in the disposable CI NVR image, without HA data mounts')
     if args.output.is_symlink() or not args.output.resolve().is_relative_to(Path('/out')):
         parser.error('Source output must be a new directory under /out')
-    report = collect(json.loads(args.inventory.read_text()), args.output, args.source_revision)
+    report = collect(json.loads(args.inventory.read_text()), args.output, args.source_revision,
+                     args.inventory.parent)
     print(json.dumps(dict(debian_sources=len(report['debian']),
                          python_sources=len(report['python']),
                          pyav_recipe_sources=len(report['pyav_recipe']),
+                         wheel_sources=len(report['wheel_sources']),
                          unavailable_debian=len(report['unavailable_debian']),
                          distribution_review=report['distribution_review'])))
     if report['unavailable_debian']:
