@@ -166,7 +166,32 @@ def repository_notices(root: Path, output: Path, name: str) -> list[dict]:
 
 def collect_overlay_sources(source_root: Path, output: Path) -> list[dict]:
     # Parse pinned recipe declarations as text, never source/execute a shell.
-    versions = dict(re.findall(r'^([A-Z0-9_]+)_VERSION=(\S+)catalogue: list, version: str) -> dict:
+    versions = dict(re.findall(r'^([A-Z0-9_]+)_VERSION=(\S+)$',
+                              (source_root / 'conf/versions').read_text(), re.MULTILINE))
+    pins = json.loads(Path(__file__).with_name('overlay_source_inputs.json').read_text())
+    records = []
+    for item in pins:
+        if item['key'] is not None and versions.get(item['key']) != item['version']:
+            raise ValueError('Overlay source input differs from the pinned build recipe')
+        path = output / item['filename']
+        download(item['url'], path, item['sha256'])
+        with tarfile.open(path) as archive:
+            member = archive.getmember(item['notice'])
+            if not member.isfile() or member.size > 4 * 1024 * 1024:
+                raise ValueError('Overlay notice is not a regular bounded source file')
+            raw = archive.extractfile(member).read()
+        if b'\0' in raw:
+            raise ValueError('Overlay notice contains binary data')
+        notice = output / 'notices' / (item['name'] + '-COPYING.txt')
+        notice.parent.mkdir(parents=True, exist_ok=True)
+        notice.write_bytes(raw)
+        records.append(dict(item, file=path.name,
+                            notice_file=notice.relative_to(output).as_posix(),
+                            notice_sha256=sha256(notice)))
+    return records
+
+
+def go_source_metadata(catalogue: list, version: str) -> dict:
     if not re.fullmatch(r'go[0-9]+\.[0-9]+\.[0-9]+', version):
         raise ValueError('Invalid Go toolchain source version')
     matches = [item for release in catalogue if release['version'] == version
@@ -256,123 +281,6 @@ def main():
                           go_toolchains=len(report['go_toolchains']),
                           base_notices=len(report['base_notices']),
                           overlay_notices=len(report['overlay_inputs']),
-                          distribution_review=report['distribution_review'])))
-
-
-if __name__ == '__main__':
-    main()
-,
-                              (source_root / 'conf/versions').read_text(), re.MULTILINE))
-    pins = json.loads(Path(__file__).with_name('overlay_source_inputs.json').read_text())
-    records = []
-    for item in pins:
-        if item['key'] is not None and versions.get(item['key']) != item['version']:
-            raise ValueError('Overlay source input differs from the pinned build recipe')
-        path = output / item['filename']
-        download(item['url'], path, item['sha256'])
-        with tarfile.open(path) as archive:
-            member = archive.getmember(item['notice'])
-            if not member.isfile() or member.size > 4 * 1024 * 1024:
-                raise ValueError('Overlay notice is not a regular bounded source file')
-            raw = archive.extractfile(member).read()
-        if b'\0' in raw:
-            raise ValueError('Overlay notice contains binary data')
-        notice = output / 'notices' / (item['name'] + '-COPYING.txt')
-        notice.parent.mkdir(parents=True, exist_ok=True)
-        notice.write_bytes(raw)
-        records.append(dict(item, file=path.name,
-                            notice_file=notice.relative_to(output).as_posix(),
-                            notice_sha256=sha256(notice)))
-    return records
-
-
-def go_source_metadata(catalogue: list, version: str) -> dict:
-    if not re.fullmatch(r'go[0-9]+\.[0-9]+\.[0-9]+', version):
-        raise ValueError('Invalid Go toolchain source version')
-    matches = [item for release in catalogue if release['version'] == version
-               for item in release['files'] if item['kind'] == 'source'
-               and item['filename'] == version + '.src.tar.gz']
-    if len(matches) != 1 or not re.fullmatch('[0-9a-f]{64}', matches[0]['sha256']):
-        raise ValueError('The official Go catalogue has no unique source checksum')
-    return matches[0]
-
-
-def collect_toolchain(version: str, output: Path) -> dict:
-    # Go serves archive checksums in its official JSON catalogue, not .sha256
-    # sidecar files. The query is fixed public metadata, never a credential.
-    with urlopen('https://go.dev/dl/?mode=json&include=all', timeout=60) as response:
-        if urlsplit(response.geturl()).scheme != 'https':
-            raise ValueError('Go catalogue redirect left HTTPS')
-        raw = response.read(16 * 1024 * 1024 + 1)
-    if len(raw) > 16 * 1024 * 1024:
-        raise ValueError('Go catalogue exceeded its size limit')
-    metadata = go_source_metadata(json.loads(raw), version)
-    url = 'https://go.dev/dl/' + version + '.src.tar.gz'
-    destination = output / (version + '.src.tar.gz')
-    result = download(url, destination, metadata['sha256'])
-    result['file'] = destination.name
-    return result
-
-
-def collect(output: Path) -> dict:
-    output.mkdir(parents=True, exist_ok=False)
-    version = command('docker', 'image', 'inspect', 'eufy-source-audit', '--format',
-                      '{{index .Config.Labels "io.hass.base.version"}}')
-    if version != '2026.08.0':
-        raise ValueError('Review base-component pins before changing the HA base image')
-    report = dict(schema=1, base_version=version, repositories={}, go_toolchains=[],
-                  base_notices=[], distribution_review='pending')
-    with tempfile.TemporaryDirectory(prefix='efx-upstream-sources-') as temporary:
-        workspace = Path(temporary)
-        container = command('docker', 'create', '--network', 'none', '--entrypoint',
-                            '/bin/true', 'eufy-source-audit')
-        if not re.fullmatch('[0-9a-f]{64}', container):
-            raise ValueError('Docker did not return an isolated stopped container')
-        try:
-            for name, path in (('go2rtc', '/opt/eufy/bridge/bin/go2rtc'), ('tempio', '/usr/bin/tempio')):
-                binary = workspace / (name + '.binary')
-                command('docker', 'cp', container + ':' + path, str(binary))
-                report['repositories'][name] = collect_repository(name, workspace, output, binary=binary)
-            # Public OS installation notices only. No container is started and
-            # no /data, /config, logs, account state or Docker socket is copied.
-            installed = workspace / 'package'
-            command('docker', 'cp', container + ':/package', str(installed))
-            for path in sorted(installed.rglob('*')):
-                if path.name.lower() not in ('copying', 'license', 'copyright', 'license.txt', 'copyright.txt'):
-                    continue
-                if path.is_symlink() or not path.is_file():
-                    continue
-                raw = path.read_bytes()
-                if len(raw) > 4 * 1024 * 1024 or b'\0' in raw:
-                    raise ValueError('Unexpected installed base notice')
-                label = quote(path.relative_to(installed).as_posix(), safe='._-')
-                target = output / 'base-notices' / label
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(raw)
-                report['base_notices'].append(dict(file=target.relative_to(output).as_posix(),
-                                                  sha256=hashlib.sha256(raw).hexdigest()))
-        finally:
-            command('docker', 'rm', container)
-        for name in ('ha-base', 'bashio', 's6-overlay', 'pyav-ffmpeg', 'pylibsrtp',
-                     'libsrtp', 'libcrc32c', 'aioquic-openssl', 'openssl-3.5.4'):
-            report['repositories'][name] = collect_repository(name, workspace, output)
-        for toolchain in sorted({r['go_toolchain'] for r in report['repositories'].values()
-                                 if 'go_toolchain' in r}):
-            report['go_toolchains'].append(collect_toolchain(toolchain, output))
-    (output / 'upstream-report.json').write_text(json.dumps(report, indent=2) + '\n')
-    return report
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, required=True)
-    args = parser.parse_args()
-    if os.environ.get('GITHUB_ACTIONS') != 'true':
-        parser.error('This collector is for disposable GitHub CI runners only')
-    report = collect(args.output)
-    print(json.dumps(dict(repositories=len(report['repositories']),
-                          go_toolchains=len(report['go_toolchains']),
-                          base_notices=len(report['base_notices']),
                           distribution_review=report['distribution_review'])))
 
 
