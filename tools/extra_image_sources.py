@@ -135,16 +135,30 @@ def collect_repository(name: str, workspace: Path, output: Path, *, binary: Path
     return record
 
 
-def collect_toolchain(version: str, output: Path) -> dict:
+def go_source_metadata(catalogue: list, version: str) -> dict:
     if not re.fullmatch(r'go[0-9]+\.[0-9]+\.[0-9]+', version):
         raise ValueError('Invalid Go toolchain source version')
-    url = 'https://go.dev/dl/' + version + '.src.tar.gz'
-    with urlopen(url + '.sha256', timeout=60) as response:
+    matches = [item for release in catalogue if release['version'] == version
+               for item in release['files'] if item['kind'] == 'source'
+               and item['filename'] == version + '.src.tar.gz']
+    if len(matches) != 1 or not re.fullmatch('[0-9a-f]{64}', matches[0]['sha256']):
+        raise ValueError('The official Go catalogue has no unique source checksum')
+    return matches[0]
+
+
+def collect_toolchain(version: str, output: Path) -> dict:
+    # Go serves archive checksums in its official JSON catalogue, not .sha256
+    # sidecar files. The query is fixed public metadata, never a credential.
+    with urlopen('https://go.dev/dl/?mode=json&include=all', timeout=60) as response:
         if urlsplit(response.geturl()).scheme != 'https':
-            raise ValueError('Go checksum redirect left HTTPS')
-        digest = response.read(128).decode().strip()
+            raise ValueError('Go catalogue redirect left HTTPS')
+        raw = response.read(16 * 1024 * 1024 + 1)
+    if len(raw) > 16 * 1024 * 1024:
+        raise ValueError('Go catalogue exceeded its size limit')
+    metadata = go_source_metadata(json.loads(raw), version)
+    url = 'https://go.dev/dl/' + version + '.src.tar.gz'
     destination = output / (version + '.src.tar.gz')
-    result = download(url, destination, digest)
+    result = download(url, destination, metadata['sha256'])
     result['file'] = destination.name
     return result
 
