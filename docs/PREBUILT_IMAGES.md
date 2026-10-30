@@ -86,6 +86,14 @@ artifact. CI artifacts still expire: release publication must preserve the parts
 their manifest and matching notices as permanent release assets. Normal app users
 will not need these developer/source archives to install the app.
 
+The base image does not retain S6's installed licence files. The supplemental
+collector therefore checks the pinned S6 recipe against reviewed source inputs,
+retains those source archives and their original COPYING text, and collects
+licences from the pinned repositories and vendored Go modules. The musl archive
+is explicitly a licence reference, not evidence of the exact libc build version.
+All original terms and copyright notices are preserved; the combined image is
+not described as solely covered by the project's MIT licence.
+
 References: [HA image configuration](https://contributors.home-assistant.io/apps/reference/configuration/#image),
 [Supervisor image export](https://github.com/home-assistant/supervisor/blob/2026.10.4/supervisor/apps/app.py),
 [PyAV 17.1.0 recipe](https://github.com/PyAV-Org/PyAV/blob/v17.1.0/scripts/ffmpeg-8.1.json).

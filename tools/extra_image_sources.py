@@ -30,6 +30,8 @@ REPOSITORIES = {
     'libcrc32c': ('google/crc32c', '02e65f4fd3065d27b2e29324800ca6d04df16126'),
     'aioquic-openssl': ('aiortc/aioquic-openssl', '107757823165a1a25511e84b44a15d659c271f4b'),
     'openssl-3.5.4': ('openssl/openssl', 'c1eeb9406b6142148f267594197d853403d10208'),
+    's6-overlay-helpers': ('just-containers/s6-overlay-helpers', '8cd03adbfc0ada2d7562be1dbb46e1136050fe8f'),
+    'bearssl': ('https://www.bearssl.org/git/BearSSL', '7bea48e5e850ab4cafbe68d3765cdaba13a86d6f'),
 }
 
 
@@ -110,8 +112,9 @@ def source_archive(root: Path, destination: Path, name: str) -> dict:
 def collect_repository(name: str, workspace: Path, output: Path, *, binary: Path | None = None) -> dict:
     repository, revision = REPOSITORIES[name]
     root = workspace / name
+    url = repository if repository.startswith('https://') else 'https://github.com/' + repository + '.git'
     command('git', '-c', 'core.autocrlf=false', 'clone', '--quiet', '--no-checkout',
-            '--filter=blob:none', 'https://github.com/' + repository + '.git', str(root))
+            '--filter=blob:none', url, str(root))
     command('git', 'checkout', '--quiet', '--detach', revision, cwd=root)
     if command('git', 'rev-parse', 'HEAD', cwd=root) != revision:
         raise ValueError('Upstream Git revision differs')
@@ -131,8 +134,61 @@ def collect_repository(name: str, workspace: Path, output: Path, *, binary: Path
         command('git', 'diff', '--exit-code', '--', 'go.mod', 'go.sum', cwd=root)
         record['vendored_modules'] = (root / 'vendor/modules.txt').read_text()
     record.update(source_archive(root, output / (name + '-source.tar.gz'), name))
+    record['notices'] = repository_notices(root, output, name)
     print('Collected upstream source:', name, revision, flush=True)
     return record
+
+
+def repository_notices(root: Path, output: Path, name: str) -> list[dict]:
+    records = []
+    root = root.resolve(strict=True)
+    for path in sorted(root.rglob('*')):
+        relative = path.relative_to(root)
+        filename = path.name.lower()
+        if '.git' in relative.parts or not filename.startswith(('license', 'licence', 'copying', 'copyright', 'notice')):
+            continue
+        if path.suffix.lower() in ('.py', '.pyc', '.c', '.h', '.rs', '.go', '.js'):
+            continue
+        resolved = path.resolve(strict=True)
+        if not resolved.is_relative_to(root) or not resolved.is_file():
+            continue
+        raw = resolved.read_bytes()
+        if len(raw) > 4 * 1024 * 1024 or b'\0' in raw:
+            raise ValueError('Unexpected public source notice')
+        identity = hashlib.sha256(relative.as_posix().encode()).hexdigest()[:24]
+        destination = output / 'notices' / f'{name}-{identity}.txt'
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(raw)
+        records.append(dict(file=destination.relative_to(output).as_posix(),
+                            source_path=relative.as_posix(), sha256=sha256(destination)))
+    return records
+
+
+def collect_overlay_sources(source_root: Path, output: Path) -> list[dict]:
+    # Parse pinned recipe declarations as text, never source/execute a shell.
+    versions = dict(re.findall(r'^([A-Z0-9_]+)_VERSION=(\S+)$',
+                              (source_root / 'conf/versions').read_text(), re.MULTILINE))
+    pins = json.loads(Path(__file__).with_name('overlay_source_inputs.json').read_text())
+    records = []
+    for item in pins:
+        if item['key'] is not None and versions.get(item['key']) != item['version']:
+            raise ValueError('Overlay source input differs from the pinned build recipe')
+        path = output / item['filename']
+        download(item['url'], path, item['sha256'])
+        with tarfile.open(path) as archive:
+            member = archive.getmember(item['notice'])
+            if not member.isfile() or member.size > 4 * 1024 * 1024:
+                raise ValueError('Overlay notice is not a regular bounded source file')
+            raw = archive.extractfile(member).read()
+        if b'\0' in raw:
+            raise ValueError('Overlay notice contains binary data')
+        notice = output / 'notices' / (item['name'] + '-COPYING.txt')
+        notice.parent.mkdir(parents=True, exist_ok=True)
+        notice.write_bytes(raw)
+        records.append(dict(item, file=path.name,
+                            notice_file=notice.relative_to(output).as_posix(),
+                            notice_sha256=sha256(notice)))
+    return records
 
 
 def go_source_metadata(catalogue: list, version: str) -> dict:
@@ -170,7 +226,7 @@ def collect(output: Path) -> dict:
     if version != '2026.08.0':
         raise ValueError('Review base-component pins before changing the HA base image')
     report = dict(schema=1, base_version=version, repositories={}, go_toolchains=[],
-                  base_notices=[], distribution_review='pending')
+                  base_notices=[], overlay_inputs=[], distribution_review='pending')
     with tempfile.TemporaryDirectory(prefix='efx-upstream-sources-') as temporary:
         workspace = Path(temporary)
         container = command('docker', 'create', '--network', 'none', '--entrypoint',
@@ -203,8 +259,10 @@ def collect(output: Path) -> dict:
         finally:
             command('docker', 'rm', container)
         for name in ('ha-base', 'bashio', 's6-overlay', 'pyav-ffmpeg', 'pylibsrtp',
-                     'libsrtp', 'libcrc32c', 'aioquic-openssl', 'openssl-3.5.4'):
+                     'libsrtp', 'libcrc32c', 'aioquic-openssl', 'openssl-3.5.4',
+                     's6-overlay-helpers', 'bearssl'):
             report['repositories'][name] = collect_repository(name, workspace, output)
+        report['overlay_inputs'] = collect_overlay_sources(workspace / 's6-overlay', output / 'overlay-inputs')
         for toolchain in sorted({r['go_toolchain'] for r in report['repositories'].values()
                                  if 'go_toolchain' in r}):
             report['go_toolchains'].append(collect_toolchain(toolchain, output))
@@ -222,6 +280,7 @@ def main():
     print(json.dumps(dict(repositories=len(report['repositories']),
                           go_toolchains=len(report['go_toolchains']),
                           base_notices=len(report['base_notices']),
+                          overlay_notices=len(report['overlay_inputs']),
                           distribution_review=report['distribution_review'])))
 
 
