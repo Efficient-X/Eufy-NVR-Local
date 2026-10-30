@@ -6,8 +6,15 @@ on:
       - 'tools/image_sources.py'
       - 'tools/extra_image_sources.py'
       - 'tools/source_bundle.py'
+      - 'tools/prebuilt_release.py'
+      - 'tools/overlay_source_inputs.json'
       - '.github/workflows/source-audit.yml'
   workflow_dispatch:
+    inputs:
+      archive_image:
+        description: Keep exact tested image bytes for an experimental prebuilt release
+        type: boolean
+        default: false
 
 # Review only: cannot create releases, write packages, or publish images.
 permissions:
@@ -27,11 +34,56 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve the checked-out source and app version
+        run: |
+          python3 -m pip install pyyaml==6.0.3
+          echo "SOURCE_REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$(python3 -c "import yaml; print(yaml.safe_load(open('eufy_nvr/config.yaml'))['version'])")" >> "$GITHUB_ENV"
       - name: Build the exact candidate
         run: |
           docker build --tag eufy-source-audit \
-            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.revision="$SOURCE_REVISION" \
+            --label org.opencontainers.image.version="$APP_VERSION" \
+            --label io.hass.arch="${{ matrix.arch }}" \
+            --label io.hass.version="$APP_VERSION" \
             --file eufy_nvr/Dockerfile eufy_nvr
+      - name: Test imports and native transport without networking
+        run: |
+          docker run --rm --network none --entrypoint python3 eufy-source-audit \
+            -c 'import av, aiortc, guided_launcher, setup_web, startup_controller'
+          docker run --rm --network none --entrypoint node eufy-source-audit \
+            /opt/eufy/bridge/sctp_oracle.js selftest
+      - name: Test actual H264 HEVC Opus and AAC tools with synthetic media
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 2 \
+            --mount "type=bind,source=$PWD/tools/image_video_smoke.py,target=/video-smoke.py,readonly" \
+            --entrypoint python3 eufy-source-audit /video-smoke.py
+      - name: Test Linux worker lifecycle using synthetic state only
+        run: |
+          docker run --rm --init --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 2 \
+            --mount "type=bind,source=$PWD/tools/linux_candidate_smoke.py,target=/smoke.py,readonly" \
+            --entrypoint python3 eufy-source-audit /smoke.py
+      - name: Check S6 container stop with a synthetic worker
+        run: |
+          cid="$(docker run --detach --network none --pids-limit 64 --memory 512m --cpus 2 \
+            --mount "type=bind,source=$PWD/tools/linux_candidate_smoke.py,target=/smoke.py,readonly" \
+            eufy-source-audit python3 /smoke.py --wait-for-stop)"
+          trap 'docker rm --force "$cid" >/dev/null' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker logs "$cid" 2>&1 | grep -q '^READY: synthetic worker'; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          docker stop --time 60 "$cid" >/dev/null
+          test "$(docker inspect --format '{{.State.ExitCode}}' "$cid")" = 0
+          docker logs "$cid" 2>&1 | grep '^PASS: container stop reached CMD'
       - name: Record the original runtime packages before source collection
         run: |
           mkdir source-review
@@ -42,7 +94,7 @@ jobs:
             --mount "type=bind,source=$PWD/source-review,target=/out" \
             --entrypoint python3 eufy-source-audit /audit.py --output /out/software
           git archive --format=tar HEAD > source-review/project-source.tar
-          printf '%s\n' "$GITHUB_SHA" > source-review/source-revision.txt
+          printf '%s\n' "$SOURCE_REVISION" > source-review/source-revision.txt
       - name: Collect exact public sources without running their code
         run: |
           docker run --rm --security-opt no-new-privileges \
@@ -51,13 +103,13 @@ jobs:
             --mount "type=bind,source=$PWD/source-review,target=/out" \
             --entrypoint python3 eufy-source-audit /sources.py \
               --inventory /out/software/inventory.json --output /out/sources \
-              --source-revision "$GITHUB_SHA"
+              --source-revision "$SOURCE_REVISION"
       - name: Collect Go and base-image source and notices without starting the app
         run: python3 tools/extra_image_sources.py --output source-review/upstream
       - name: Package sources into downloadable parts with whole-archive and part hashes
         run: |
           python3 tools/source_bundle.py --source source-review --output source-parts \
-            --architecture "${{ matrix.arch }}" --source-revision "$GITHUB_SHA"
+            --architecture "${{ matrix.arch }}" --source-revision "$SOURCE_REVISION"
           python3 -c "import json, pathlib; p = next(pathlib.Path('source-parts').glob('*.json')); assert len(json.loads(p.read_text())['parts']) <= 4, 'Review source growth before adding more parts'"
       - name: Preserve the small reports and installed software notices
         if: always()
@@ -70,6 +122,8 @@ jobs:
             source-review/software/
             source-review/sources/source-report.json
             source-review/upstream/upstream-report.json
+            source-review/upstream/notices/
+            source-review/upstream/overlay-inputs/notices/
             source-parts/*.json
           if-no-files-found: error
           retention-days: 7
@@ -104,4 +158,22 @@ jobs:
           name: sources-${{ matrix.arch }}-part03
           path: source-parts/*.part03
           compression-level: 0
+          retention-days: 7
+      - name: Retain the exact tested image for a separately approved publisher
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.archive_image }}
+        run: |
+          mkdir candidate-image
+          docker save eufy-source-audit | gzip -1 > "candidate-image/image-${{ matrix.arch }}.tar.gz"
+          python3 tools/prebuilt_release.py record --architecture "${{ matrix.arch }}" \
+            --revision "$SOURCE_REVISION" --version "$APP_VERSION" \
+            --archive "candidate-image/image-${{ matrix.arch }}.tar.gz" \
+            --output "candidate-image/image-${{ matrix.arch }}.json"
+      - name: Preserve tested image bytes without publishing them
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.archive_image }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: candidate-image-${{ matrix.arch }}
+          path: candidate-image/
+          compression-level: 0
+          if-no-files-found: error
           retention-days: 7
