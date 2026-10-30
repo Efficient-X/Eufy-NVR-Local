@@ -57,6 +57,17 @@ def test_go_binary_must_match_clean_pinned_source():
         extras.go_build_info(info.replace('go1.24.2', 'devel'), revision)
 
 
+def test_go_checksum_must_describe_the_exact_source_archive():
+    catalogue = [dict(version='go1.24.2', files=[dict(kind='source',
+                       filename='go1.24.2.src.tar.gz', sha256='a' * 64)])]
+    assert extras.go_source_metadata(catalogue, 'go1.24.2')['sha256'] == 'a' * 64
+    with pytest.raises(ValueError, match='unique source checksum'):
+        extras.go_source_metadata(catalogue, 'go1.24.3')
+    catalogue[0]['files'][0]['kind'] = 'archive'
+    with pytest.raises(ValueError, match='unique source checksum'):
+        extras.go_source_metadata(catalogue, 'go1.24.2')
+
+
 def test_upstream_archive_excludes_git_state(tmp_path):
     root = tmp_path / 'checkout'
     (root / '.git').mkdir(parents=True)
