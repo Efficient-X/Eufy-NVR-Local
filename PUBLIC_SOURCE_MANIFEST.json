@@ -681,8 +681,8 @@
       "size": 2415
     },
     "tools/extra_image_sources.py": {
-      "sha256": "bb11ff2a3ff5dcd4b60d9c38f90e134002e85d45dd08875b95e306bda68aee6e",
-      "size": 8739
+      "sha256": "0320f52c7843e9d6e1d26a311df0c220ddb9a0ef95c365bbb0a351aeb9bfa294",
+      "size": 10437
     },
     "tools/image_inventory.py": {
       "sha256": "cf1ab47fcbfd749faebf7b0aca1b5df39a2a832fe21dc65a739efdeefffd671e",
