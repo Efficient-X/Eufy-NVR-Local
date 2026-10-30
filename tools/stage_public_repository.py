@@ -21,6 +21,7 @@ SOURCE_FILES = (
     '.github/workflows/ci.yml',
     '.github/workflows/image-audit.yml',
     '.github/workflows/source-audit.yml',
+    '.github/workflows/publish-prebuilt.yml',
     '.github/workflows/hardening-tests.yml',
     '.gitignore',
     'LICENSE',
@@ -168,6 +169,7 @@ SOURCE_FILES = (
     'tests/test_protocol_release_hardening.py',
     'tests/test_ptcs_transport.mjs',
     'tests/test_public_package.py',
+    'tests/test_prebuilt_release.py',
     'tests/test_image_inventory.py',
     'tests/test_image_sources.py',
     'tests/test_source_release_tools.py',
@@ -194,6 +196,7 @@ SOURCE_FILES = (
     'tools/image_sources.py',
     'tools/extra_image_sources.py',
     'tools/overlay_source_inputs.json',
+    'tools/prebuilt_release.py',
     'tools/source_bundle.py',
     'tools/image_video_smoke.py',
 )
