@@ -21,8 +21,8 @@
       "size": 3310
     },
     ".github/workflows/source-audit.yml": {
-      "sha256": "50d362b432960f2735d5433f58aa9255a75b79bf004fffe5c6749a17110ddbea",
-      "size": 2550
+      "sha256": "bf2e72f8e269264004e982103b4e7f8a640913c6e36e004fa9e98dec67f8ba5f",
+      "size": 4952
     },
     ".gitignore": {
       "sha256": "bdef3e9b343ba31d98c8eb96dac66e2140dd814c109dcbbe5cff55c13c083150",
@@ -249,8 +249,8 @@
       "size": 11505
     },
     "docs/PREBUILT_IMAGES.md": {
-      "sha256": "442ea8817a35e1087f47c2975508c8aa019ad8f0f5fa6810488309eb5eaf5b79",
-      "size": 4893
+      "sha256": "ab23ddf4348cd662c325d1bf6a5fa14fc71a3ec902e9a32c6735e5deddb4d3b5",
+      "size": 5920
     },
     "docs/PROTOCOL.md": {
       "sha256": "d68d316fce54d4d2c3cec7fe459809fb2d48f8bcecffec62787bcc68b73be04e",
@@ -656,6 +656,10 @@
       "sha256": "ff453338806de59329e925b5ff29d70f177c80e822a504ceba078f2a7c5322df",
       "size": 1320
     },
+    "tests/test_source_release_tools.py": {
+      "sha256": "60953f902873c759a5bff2fdcccf283b72d678acc8665607de51e5aaabaab8ea",
+      "size": 4324
+    },
     "tests/test_token_expiry.py": {
       "sha256": "409c4b528769e4f299329f858a3bb21c960806407a8e91bc5629677c745265b1",
       "size": 6135
@@ -676,13 +680,17 @@
       "sha256": "0fbeb0d45dcf7b052d0a7c941ff5992e92f86c5c7f2fb72bd067e05c63502637",
       "size": 2415
     },
+    "tools/extra_image_sources.py": {
+      "sha256": "bb11ff2a3ff5dcd4b60d9c38f90e134002e85d45dd08875b95e306bda68aee6e",
+      "size": 8739
+    },
     "tools/image_inventory.py": {
       "sha256": "cf1ab47fcbfd749faebf7b0aca1b5df39a2a832fe21dc65a739efdeefffd671e",
       "size": 6597
     },
     "tools/image_sources.py": {
-      "sha256": "fa63be07b1a11f03f324920a895f15c72278b05d97b247f47082cdb97be9dc88",
-      "size": 15385
+      "sha256": "2072fe35a814bffbc1516f853a3e23ac973e199a68b22f9360d2163e4966946d",
+      "size": 18828
     },
     "tools/image_video_smoke.py": {
       "sha256": "e36393b75c7d7ff4e2541c93aad550b73a904a52c7f49c781860f8ee01429e5b",
@@ -692,13 +700,17 @@
       "sha256": "095f06abe8096d78bee4679bc29ce56abf5ccdbb81358a492f5719f5f3c8bf38",
       "size": 9824
     },
+    "tools/source_bundle.py": {
+      "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
+      "size": 4345
+    },
     "tools/stage_guided_candidate.py": {
       "sha256": "e277e64d2db2d47ac4d50fd30ba3350af1807857684a1c077e6f1ea57e597379",
       "size": 10049
     },
     "tools/stage_public_repository.py": {
-      "sha256": "15c2b2d7665b6d7db99205bcf1bed9a7ae71cf9a77eed4ebb5bc3dd517724c45",
-      "size": 11936
+      "sha256": "2034fe777cce021a2092f9ef8881f301b7c2205e075fe6706a5a58e72701df3d",
+      "size": 12044
     },
     "tools/verify_candidate.py": {
       "sha256": "d83b5609a20b610f7031433b7ce4ceff1573996df9fbed2003853ddd821fb28e",
