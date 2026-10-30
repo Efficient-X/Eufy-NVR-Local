@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import subprocess
@@ -28,8 +29,41 @@ REPOSITORIES = {
 
 
 def command(*args, cwd=None, env=None, timeout=120):
-    return subprocess.run(args, cwd=cwd, env=env, check=True, capture_output=True,
-                          text=True, timeout=timeout).stdout.strip()
+    result = subprocess.run(args, cwd=cwd, env=env, capture_output=True,
+                            text=True, timeout=timeout)
+    if result.returncode:
+        detail = re.sub(r'https?://\S+', '[upstream URL]', result.stderr).strip()[:1500]
+        raise RuntimeError(f'{args[0]} failed: {detail}')
+    return result.stdout.strip()
+
+
+def inspect_go_binary(binary: Path, workspace: Path) -> str:
+    # Official go2rtc release binaries are UPX-packed. Unpack a temporary copy
+    # solely for Go's data reader; never execute or change the shipped program.
+    with binary.open('rb') as handle:
+        packed = b'UPX!' in handle.read(1024)
+    inspect_path = binary
+    if packed:
+        assets = {
+            'x86_64': ('amd64', 'ddc2654063fe4dc80d95b420788494e4db078ebb01a650692d623b5a9906e61e'),
+            'aarch64': ('arm64', '100310f74eb6f67694d1d0377f1c729b6a49238ce8c4de21ea2e7d3406186f8b'),
+        }
+        architecture, digest = assets[platform.machine()]
+        stem = f'upx-5.0.2-{architecture}_linux'
+        archive = workspace / (stem + '.tar.xz')
+        executable = workspace / 'upx'
+        if not executable.exists():
+            download(f'https://github.com/upx/upx/releases/download/v5.0.2/{stem}.tar.xz',
+                     archive, digest)
+            with tarfile.open(archive) as source:
+                member = source.getmember(stem + '/upx')
+                if not member.isfile() or member.size > 16 * 1024 * 1024:
+                    raise ValueError('Unexpected official UPX executable')
+                executable.write_bytes(source.extractfile(member).read())
+            executable.chmod(0o700)
+        inspect_path = workspace / (binary.name + '.unpacked')
+        command(str(executable), '-d', '-o', str(inspect_path), str(binary))
+    return command('go', 'version', '-m', str(inspect_path))
 
 
 def go_build_info(text: str, expected_revision: str) -> str:
@@ -72,7 +106,7 @@ def collect_repository(name: str, workspace: Path, output: Path, *, binary: Path
         raise ValueError('Upstream Git revision differs')
     record = dict(repository=repository, revision=revision)
     if binary is not None:
-        info = command('go', 'version', '-m', str(binary))
+        info = inspect_go_binary(binary, workspace)
         record['go_toolchain'] = go_build_info(info, revision)
         record['binary_sha256'] = sha256(binary)
         record['binary_buildinfo'] = info.splitlines()[1:]
