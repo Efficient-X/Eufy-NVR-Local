@@ -36,7 +36,7 @@ the media libraries; they do not prove real account or live-camera behaviour.
 3. Publish versioned architecture images and matching source/notice material.
    Verify anonymous pulls by exact digest before pointing the HA app at them.
    A restored installation will need access to those retained registry versions.
-4. Add `image: ghcr.io/efficient-x/eufy-nvr-local-{arch}` only after the matching
+4. Add `image: ghcr.io/efficient-x/eufy-nvr-local` only after the matching
    version tags exist. Keep existing app slug, saved data and port assignments.
    Do not publish a `latest` tag that silently changes a versioned installation.
 5. Test installation, stop/start, restore, account access and real live lenses.
@@ -93,6 +93,40 @@ licences from the pinned repositories and vendored Go modules. The musl archive
 is explicitly a licence reference, not evidence of the exact libc build version.
 All original terms and copyright notices are preserved; the combined image is
 not described as solely covered by the project's MIT licence.
+
+## Maintainer: publishing the tested bytes
+
+This is a two-step manual process. It does not update a household installation.
+
+1. Prepare an experimental version on a reviewed branch and let its complete CI
+   workflow pass. Run `Image source collection audit` on that exact branch with
+   image archiving enabled. This runs native media, worker and S6 stop checks and
+   keeps the exact image with its software/source inventory. No account is used.
+2. On the default branch, run `Publish reviewed prebuilt images`, choose `stage`,
+   and enter that completed audit's run number and exact experimental version.
+   It refuses failed audits, foreign repositories, PR-only runs and commits that
+   did not pass the complete CI workflow. It checks every source part, joined
+   source archive and image archive against the recorded SHA-256 checksums.
+3. Staging publishes the matching source parts and original notices as permanent
+   pre-release assets before pushing the two architecture images. No `latest`
+   tag is made. Existing version tags are never intentionally overwritten. If a
+   run fails after creating a release or tag, inspect that partial state; do not
+   delete or overwrite it simply to make a retry pass.
+4. The first GHCR package is private. Make this approved public software package
+   public in GitHub's package settings. Do not add household credentials, camera
+   pictures, configuration exports or private data to the package or release.
+5. Run the publisher again with `promote` and the same audit/version. It uses an
+   empty Docker sign-in configuration to pull both architecture digests, checks
+   their labels, then creates the versioned multi-architecture manifest. This
+   proves a normal installer can fetch the images without a GitHub login.
+6. Only after this succeeds should a separately reviewed change add the `image`
+   setting to the app-store default. Keep hardware acceptance and rollback as
+   separate gates. Preserve the old working engine and its saved state.
+
+The publisher uses the job's short-lived GitHub token. It requires no personal
+access token. PR/source-audit jobs retain read-only repository permissions; only
+the explicitly dispatched publisher on the default branch can write packages
+and releases. The original component licences remain applicable.
 
 References: [HA image configuration](https://contributors.home-assistant.io/apps/reference/configuration/#image),
 [Supervisor image export](https://github.com/home-assistant/supervisor/blob/2026.10.4/supervisor/apps/app.py),

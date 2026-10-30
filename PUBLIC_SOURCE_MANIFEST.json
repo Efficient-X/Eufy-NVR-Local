@@ -20,9 +20,13 @@
       "sha256": "e06d4cbf152284ef8ee5e4abd1963863aea07aa5b82fe696e9bdc7980237e0e9",
       "size": 3310
     },
+    ".github/workflows/publish-prebuilt.yml": {
+      "sha256": "3f3eb9c624804afd49dd4150f762d930f54bae502d41eaf82d72fe3c56e2b377",
+      "size": 1616
+    },
     ".github/workflows/source-audit.yml": {
-      "sha256": "bf2e72f8e269264004e982103b4e7f8a640913c6e36e004fa9e98dec67f8ba5f",
-      "size": 4952
+      "sha256": "2389ee274348d0cb0c1c25740444fd99884027b756f38c4ade36ed96b186d82c",
+      "size": 9041
     },
     ".gitignore": {
       "sha256": "bdef3e9b343ba31d98c8eb96dac66e2140dd814c109dcbbe5cff55c13c083150",
@@ -249,8 +253,8 @@
       "size": 11505
     },
     "docs/PREBUILT_IMAGES.md": {
-      "sha256": "6b75194a2a134990dcc649231c770ffb8889609f360fde951f69fa99b8fa1fae",
-      "size": 6456
+      "sha256": "568507c4a93355cfbc5006bef55a77224b18d3c761e9e01a34fa8d960381b6ec",
+      "size": 8755
     },
     "docs/PROTOCOL.md": {
       "sha256": "d68d316fce54d4d2c3cec7fe459809fb2d48f8bcecffec62787bcc68b73be04e",
@@ -596,6 +600,10 @@
       "sha256": "aa461f3e1dc3d6db13e15b347191bac6d2372eac93bf0bb66145111ca9679209",
       "size": 1206
     },
+    "tests/test_prebuilt_release.py": {
+      "sha256": "2f823625f4a66ad30e64d4d949dfad56049229c63f41f496190a09ff704bc091",
+      "size": 4051
+    },
     "tests/test_private_diagnostics.py": {
       "sha256": "bc40a1873aee183d3c83249b7825668f083c47863cc1524bd7660e9a9e563faf",
       "size": 2562
@@ -704,6 +712,10 @@
       "sha256": "1cc1429f1e4f920a966cb42697f4af6044fdff7bcf3d2b32e918e43c6201501b",
       "size": 3339
     },
+    "tools/prebuilt_release.py": {
+      "sha256": "0f9b960b36929adf25cf00d7457e9ae034154689421b5382081e0a6c6316f6ed",
+      "size": 13347
+    },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
       "size": 4345
@@ -713,8 +725,8 @@
       "size": 10049
     },
     "tools/stage_public_repository.py": {
-      "sha256": "9d43bfec6d5a99a3dbc4d473bd59a359f4afd1ee9ee72f421022884767ed501b",
-      "size": 12084
+      "sha256": "6066b0766f09b67917610cff83a115e58d228e87b78392a000325e9c34ff7fc7",
+      "size": 12201
     },
     "tools/verify_candidate.py": {
       "sha256": "d83b5609a20b610f7031433b7ce4ceff1573996df9fbed2003853ddd821fb28e",

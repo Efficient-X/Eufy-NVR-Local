@@ -1,0 +1,51 @@
+name: Publish reviewed prebuilt images
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Stage images first; promote only after the package is public
+        required: true
+        type: choice
+        options: [stage, promote]
+      audit_run:
+        description: Successful manual source audit run with image archiving enabled
+        required: true
+        type: string
+      version:
+        description: Exact experimental version, for example 0.8.0-alpha.2
+        required: true
+        type: string
+
+# A manual, trusted-default-branch publisher. PR jobs never receive write access.
+permissions:
+  contents: read
+
+concurrency:
+  group: prebuilt-publication-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'Efficient-X/Eufy-NVR-Local' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Publish only successful audited bytes or verify the public manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_OPERATION: ${{ inputs.operation }}
+          AUDIT_RUN: ${{ inputs.audit_run }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: >-
+          python3 tools/prebuilt_release.py "$RELEASE_OPERATION"
+          --audit-run "$AUDIT_RUN" --version "$RELEASE_VERSION"
