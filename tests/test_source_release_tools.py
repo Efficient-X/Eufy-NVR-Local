@@ -143,3 +143,24 @@ def test_almalinux_source_uses_reviewed_source_hash_not_the_binary_hash():
     source = sources.sbom_sources(bom)[0]
     assert source['sha256'] == sources.ALMA_SOURCE_RPMS[('libxcb', '1.13.1-1.el8')][1]
     assert source['filename'].endswith('.src.rpm')
+
+
+def test_repository_notices_preserve_text_without_copying_git_state(tmp_path):
+    root = tmp_path / 'source'
+    (root / '.git').mkdir(parents=True)
+    (root / 'COPYING').write_bytes(b'Copyright upstream authors\nLicence text\n')
+    (root / '.git/LICENSE').write_text('private fixture')
+    records = extras.repository_notices(root, tmp_path / 'review', 'example')
+    assert len(records) == 1
+    assert (tmp_path / 'review' / records[0]['file']).read_bytes() == (root / 'COPYING').read_bytes()
+
+
+def test_overlay_recipe_change_fails_before_any_download(tmp_path, monkeypatch):
+    root = tmp_path / 'overlay'
+    (root / 'conf').mkdir(parents=True)
+    (root / 'conf/versions').write_text('SKALIBS_VERSION=v0.0.0\n')
+    def must_not_download(*args, **kwargs):
+        pytest.fail('A mismatched recipe must not download anything')
+    monkeypatch.setattr(extras, 'download', must_not_download)
+    with pytest.raises(ValueError, match='pinned build recipe'):
+        extras.collect_overlay_sources(root, tmp_path / 'review')
