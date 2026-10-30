@@ -1,0 +1,93 @@
+[
+  {
+    "key": "SKALIBS",
+    "version": "v2.15.0.0",
+    "name": "skalibs",
+    "url": "https://skarnet.org/software/skalibs/skalibs-2.15.0.0.tar.gz",
+    "filename": "skalibs-2.15.0.0.tar.gz",
+    "sha256": "7fde96e8afb4191593a15328883e9c7726c96891cf071222146821e8c87f8007",
+    "notice": "skalibs-2.15.0.0/COPYING"
+  },
+  {
+    "key": "EXECLINE",
+    "version": "v2.9.9.0",
+    "name": "execline",
+    "url": "https://skarnet.org/software/execline/execline-2.9.9.0.tar.gz",
+    "filename": "execline-2.9.9.0.tar.gz",
+    "sha256": "1f628b670eb47fef9e05224ea56eb736007457cb6ccc0cefd37f0bfde61a02ae",
+    "notice": "execline-2.9.9.0/COPYING"
+  },
+  {
+    "key": "S6",
+    "version": "v2.15.0.0",
+    "name": "s6",
+    "url": "https://skarnet.org/software/s6/s6-2.15.0.0.tar.gz",
+    "filename": "s6-2.15.0.0.tar.gz",
+    "sha256": "27dff73d626285540133e075e75887087f5117fd51de59503ef7d29e96f69e4c",
+    "notice": "s6-2.15.0.0/COPYING"
+  },
+  {
+    "key": "S6_RC",
+    "version": "v0.6.1.0",
+    "name": "s6-rc",
+    "url": "https://skarnet.org/software/s6-rc/s6-rc-0.6.1.0.tar.gz",
+    "filename": "s6-rc-0.6.1.0.tar.gz",
+    "sha256": "6878e024341396364f75bbc5fd7a09c04864de7a2199bc98bd78200272502954",
+    "notice": "s6-rc-0.6.1.0/COPYING"
+  },
+  {
+    "key": "S6_LINUX_INIT",
+    "version": "v1.2.0.1",
+    "name": "s6-linux-init",
+    "url": "https://skarnet.org/software/s6-linux-init/s6-linux-init-1.2.0.1.tar.gz",
+    "filename": "s6-linux-init-1.2.0.1.tar.gz",
+    "sha256": "72d59b13683d1390f7df9a286be467e73293416021af9fa1023c9293ec5c7d7c",
+    "notice": "s6-linux-init-1.2.0.1/COPYING"
+  },
+  {
+    "key": "S6_PORTABLE_UTILS",
+    "version": "v2.3.1.2",
+    "name": "s6-portable-utils",
+    "url": "https://skarnet.org/software/s6-portable-utils/s6-portable-utils-2.3.1.2.tar.gz",
+    "filename": "s6-portable-utils-2.3.1.2.tar.gz",
+    "sha256": "cfb90186d0c0eb204e1e5c6f9379e99413c546bccf38bb6e76177f82371aa3aa",
+    "notice": "s6-portable-utils-2.3.1.2/COPYING"
+  },
+  {
+    "key": "S6_LINUX_UTILS",
+    "version": "v2.6.4.1",
+    "name": "s6-linux-utils",
+    "url": "https://skarnet.org/software/s6-linux-utils/s6-linux-utils-2.6.4.1.tar.gz",
+    "filename": "s6-linux-utils-2.6.4.1.tar.gz",
+    "sha256": "16e1a5b5a2b4a98674b4a9719612adb79588e3c20c4083360278ea38f2d32129",
+    "notice": "s6-linux-utils-2.6.4.1/COPYING"
+  },
+  {
+    "key": "S6_DNS",
+    "version": "v2.4.1.2",
+    "name": "s6-dns",
+    "url": "https://skarnet.org/software/s6-dns/s6-dns-2.4.1.2.tar.gz",
+    "filename": "s6-dns-2.4.1.2.tar.gz",
+    "sha256": "0618d8830fce63ee17b7f55e49428069c85c97a1710827a7b2349b660cd33a4e",
+    "notice": "s6-dns-2.4.1.2/COPYING"
+  },
+  {
+    "key": "S6_NETWORKING",
+    "version": "v2.8.0.0",
+    "name": "s6-networking",
+    "url": "https://skarnet.org/software/s6-networking/s6-networking-2.8.0.0.tar.gz",
+    "filename": "s6-networking-2.8.0.0.tar.gz",
+    "sha256": "ac4f65840fcec1624f7bf9c632fb40553851bc902957ff956b2a1f2281a45cd4",
+    "notice": "s6-networking-2.8.0.0/COPYING"
+  },
+  {
+    "key": null,
+    "version": "1.2.5",
+    "name": "musl",
+    "purpose": "licence-reference",
+    "url": "https://musl.libc.org/releases/musl-1.2.5.tar.gz",
+    "filename": "musl-1.2.5.tar.gz",
+    "sha256": "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4",
+    "notice": "musl-1.2.5/COPYRIGHT"
+  }
+]
