@@ -68,6 +68,35 @@ def test_upstream_archive_excludes_git_state(tmp_path):
         assert archive.getnames() == ['example/LICENSE']
 
 
+def test_upstream_archive_preserves_only_internal_relative_links(tmp_path):
+    root = tmp_path / 'checkout'
+    root.mkdir()
+    (root / 'LICENSE').write_text('upstream licence')
+    link = root / 'COPYING'
+    try:
+        link.symlink_to('LICENSE')
+    except OSError:
+        pytest.skip('Symlink creation unavailable on this test system')
+    archive_path = tmp_path / 'public.tar.gz'
+    extras.source_archive(root, archive_path, 'example')
+    with tarfile.open(archive_path) as archive:
+        member = archive.getmember('example/COPYING')
+        assert member.issym() and member.linkname == 'LICENSE'
+
+
+def test_upstream_archive_refuses_links_outside_the_checkout(tmp_path):
+    root = tmp_path / 'checkout'
+    root.mkdir()
+    private = tmp_path / 'private'
+    private.write_text('private fixture')
+    try:
+        (root / 'COPYING').symlink_to(private)
+    except OSError:
+        pytest.skip('Symlink creation unavailable on this test system')
+    with pytest.raises(ValueError, match='escapes'):
+        extras.source_archive(root, tmp_path / 'public.tar.gz', 'example')
+
+
 def test_sbom_crate_uses_fixed_registry_and_exact_hash():
     component = dict(name='example', version='1.2.3', purl='pkg:cargo/example@1.2.3',
                      hashes=[dict(alg='SHA-256', content='a' * 64)])
@@ -94,3 +123,12 @@ def test_sbom_must_match_its_inventory_hash(tmp_path):
     inventory = {'python': [{'sboms': [{'file': 'bom.json', 'sha256': '0' * 64}]}]}
     with pytest.raises(ValueError, match='differs'):
         sources.collect_sbom_sources(inventory, metadata, tmp_path / 'output')
+
+
+def test_almalinux_source_uses_reviewed_source_hash_not_the_binary_hash():
+    bom = {'components': [dict(name='libxcb', version='1.13.1-1.el8',
+                              purl='pkg:rpm/almalinux/libxcb@1.13.1-1.el8',
+                              hashes=[dict(alg='SHA-256', content='0' * 64)])]}
+    source = sources.sbom_sources(bom)[0]
+    assert source['sha256'] == sources.ALMA_SOURCE_RPMS[('libxcb', '1.13.1-1.el8')][1]
+    assert source['filename'].endswith('.src.rpm')
