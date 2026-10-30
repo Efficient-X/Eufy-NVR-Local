@@ -23,8 +23,13 @@ REPOSITORIES = {
     'tempio': ('home-assistant/tempio', '56918dfb7db5fec2161b2c5b37ee42f49176d34b'),
     'ha-base': ('home-assistant/docker-base', '6a3ff4c10f6ed8564a092c33051024a1b1042ee2'),
     'bashio': ('hassio-addons/bashio', 'f788a0b8e944c5fed623225fe37af8dda97ac2f2'),
-    's6-overlay': ('just-containers/s6-overlay', '29fc4e475004f67c6e7ff479c2253a2ed6f79b2b'),
+    's6-overlay': ('just-containers/s6-overlay', 'f1fecfd867a13723588aa3ed6fe2ce480860dda3'),
     'pyav-ffmpeg': ('PyAV-Org/pyav-ffmpeg', 'b84838a003b1626152ef530750d5c3e0022c3db9'),
+    'pylibsrtp': ('aiortc/pylibsrtp', '2ed38a30f6901315d247bd5d98c6779867a9475a'),
+    'libsrtp': ('cisco/libsrtp', 'ee1a77c9f9dc02c42bda9901038c500c5efe4cfa'),
+    'libcrc32c': ('google/crc32c', '02e65f4fd3065d27b2e29324800ca6d04df16126'),
+    'aioquic-openssl': ('aiortc/aioquic-openssl', '107757823165a1a25511e84b44a15d659c271f4b'),
+    'openssl-3.5.4': ('openssl/openssl', 'c1eeb9406b6142148f267594197d853403d10208'),
 }
 
 
@@ -79,20 +84,26 @@ def go_build_info(text: str, expected_revision: str) -> str:
 
 
 def source_archive(root: Path, destination: Path, name: str) -> dict:
+    root = root.resolve(strict=True)
     paths = [p for p in sorted(root.rglob('*')) if '.git' not in p.relative_to(root).parts]
-    if any(p.is_symlink() for p in paths):
-        raise ValueError('Upstream source contains a symlink requiring review')
+    for path in paths:
+        if path.is_symlink() and (Path(os.readlink(path)).is_absolute()
+                                  or not path.resolve().is_relative_to(root)):
+            raise ValueError('Upstream source link escapes its repository')
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         raise ValueError('Never overwrite source evidence')
     with tarfile.open(destination, 'w:gz') as archive:
         for path in paths:
-            if path.is_file():
+            if path.is_file() or path.is_symlink():
                 info = archive.gettarinfo(str(path), arcname=name + '/' + path.relative_to(root).as_posix())
                 info.uid = info.gid = info.mtime = 0
                 info.uname = info.gname = ''
-                with path.open('rb') as handle:
-                    archive.addfile(info, handle)
+                if info.issym():
+                    archive.addfile(info)
+                else:
+                    with path.open('rb') as handle:
+                        archive.addfile(info, handle)
     return dict(file=destination.name, size=destination.stat().st_size, sha256=sha256(destination))
 
 
@@ -177,7 +188,8 @@ def collect(output: Path) -> dict:
                                                   sha256=hashlib.sha256(raw).hexdigest()))
         finally:
             command('docker', 'rm', container)
-        for name in ('ha-base', 'bashio', 's6-overlay', 'pyav-ffmpeg'):
+        for name in ('ha-base', 'bashio', 's6-overlay', 'pyav-ffmpeg', 'pylibsrtp',
+                     'libsrtp', 'libcrc32c', 'aioquic-openssl', 'openssl-3.5.4'):
             report['repositories'][name] = collect_repository(name, workspace, output)
         for toolchain in sorted({r['go_toolchain'] for r in report['repositories'].values()
                                  if 'go_toolchain' in r}):
