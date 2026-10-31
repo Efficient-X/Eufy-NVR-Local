@@ -49,3 +49,9 @@ jobs:
         run: >-
           python3 tools/prebuilt_release.py "$RELEASE_OPERATION"
           --audit-run "$AUDIT_RUN" --version "$RELEASE_VERSION"
+      - name: Report public image import identities after a failed publisher
+        if: failure()
+        run: |
+          docker version --format '{{.Server.Version}}'
+          docker image ls --no-trunc --format '{{.ID}} {{.Repository}}:{{.Tag}}'
+          docker image inspect eufy-source-audit --format '{{.Id}} {{.Architecture}} {{json .RootFS.Layers}}' || true
