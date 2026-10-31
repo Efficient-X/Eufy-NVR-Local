@@ -26,6 +26,7 @@ def test_staged_candidate_is_explicit_and_does_not_change_release(tmp_path):
     assert config["ingress"] is True and config["ingress_port"] == 0
     assert config["panel_admin"] is True and config["homeassistant_api"] is True
     assert "watchdog" not in config and "webui" not in config
+    assert "image" not in config
     assert not config.get("hassio_api", False)
     assert not config.get("full_access", False)
     assert config["slug"] == "eufy_nvr"
