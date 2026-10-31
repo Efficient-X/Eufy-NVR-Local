@@ -159,7 +159,7 @@ def image_manifest(reference):
 def archive_config_digest(archive, architecture, revision, version):
     # Docker saves both classic images and OCI indices with this compatibility
     # manifest. Read bounded metadata only; never extract or execute an image.
-    with tarfile.open(archive, 'r|gz') as source:
+    with tarfile.open(archive, 'r|*') as source:
         manifest = None
         for member in source:
             if member.name == 'manifest.json':
@@ -174,7 +174,7 @@ def archive_config_digest(archive, architecture, revision, version):
     if not match:
         raise ValueError('Unexpected archived image config identity')
     digest = match.group(1) or match.group(2)
-    with tarfile.open(archive, 'r|gz') as source:
+    with tarfile.open(archive, 'r|*') as source:
         for member in source:
             if member.name != name:
                 continue
@@ -234,20 +234,22 @@ def ensure_sources(tag, revision, assets, workspace):
     retain_assets(tag, assets, workspace)
 
 
-def loaded_image_identity(receipt, config_digest, arch, revision, version):
-    # Loading an OCI archive into the classic store changes its local identity
-    # from the saved index digest to the verified runtime config digest.
-    identities = list(dict.fromkeys((receipt['image_id'], config_digest)))
-    for identity in identities:
-        try:
-            metadata = json.loads(run('docker', 'image', 'inspect', identity))[0]
-        except RuntimeError:
-            continue
-        if metadata.get('Id') != identity:
-            raise ValueError('Loaded image identity differs')
-        validate_image(metadata, arch, revision, version)
-        return identity
-    raise ValueError('Neither verified saved image identity was loaded')
+def loaded_image_identity(config_digest, arch, revision, version, workspace):
+    # Docker's classic and containerd stores assign different image IDs. The
+    # archive's fixed local tag locates it; a fresh export proves that import
+    # retained the exact runtime config (including layer diff IDs and labels).
+    reference = 'eufy-source-audit:latest'
+    platform = 'linux/' + ARCHITECTURES[arch]
+    metadata = json.loads(run('docker', 'image', 'inspect', '--platform', platform, reference))[0]
+    validate_image(metadata, arch, revision, version)
+    identity = metadata.get('Id', '')
+    if not re.fullmatch(r'sha256:[0-9a-f]{64}', identity):
+        raise ValueError('Loaded image identity is invalid')
+    exported = workspace / ('loaded-runtime-' + arch + '.tar')
+    run('docker', 'image', 'save', '--platform', platform, '--output', str(exported), reference)
+    if archive_config_digest(exported, arch, revision, version) != config_digest:
+        raise ValueError('Loaded runtime config differs from the audited archive')
+    return identity
 
 
 def stage(run_id, version, revision, workspace):
@@ -290,8 +292,8 @@ def stage(run_id, version, revision, workspace):
     for arch, receipt, archive in images:
         reference = IMAGE + ':' + version + '-' + arch
         config_digest = archive_config_digest(archive, arch, revision, version)
-        run('docker', 'load', '--input', str(archive))
-        loaded_identity = loaded_image_identity(receipt, config_digest, arch, revision, version)
+        run('docker', 'load', '--platform', 'linux/' + ARCHITECTURES[arch], '--input', str(archive))
+        loaded_identity = loaded_image_identity(config_digest, arch, revision, version, workspace)
         remote = image_manifest(reference)
         if remote is None:
             run('docker', 'tag', loaded_identity, reference)
