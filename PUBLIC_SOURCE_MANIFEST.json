@@ -21,8 +21,8 @@
       "size": 3310
     },
     ".github/workflows/publish-prebuilt.yml": {
-      "sha256": "3f3eb9c624804afd49dd4150f762d930f54bae502d41eaf82d72fe3c56e2b377",
-      "size": 1616
+      "sha256": "7fff205578fc4aa7850083c36ba4a66907063a03fb6aa0ada38c233abf8839ac",
+      "size": 1985
     },
     ".github/workflows/source-audit.yml": {
       "sha256": "2389ee274348d0cb0c1c25740444fd99884027b756f38c4ade36ed96b186d82c",
