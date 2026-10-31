@@ -132,3 +132,26 @@ def test_existing_version_tag_cannot_be_retargeted_by_resume(tmp_path, monkeypat
     monkeypatch.setattr(release, 'run', lambda *args, **kwargs: pytest.fail('Must not replace the tag'))
     with pytest.raises(ValueError, match='exact experimental source commit'):
         release.ensure_sources('v1.0.0-alpha.1', REVISION, [], tmp_path)
+
+
+def test_remote_manifest_identity_hashes_original_registry_bytes(monkeypatch):
+    import subprocess
+    raw = b'{ "schemaVersion":2, "config":{"digest":"sha256:example"} }'
+    monkeypatch.setattr(release.subprocess, 'run', lambda *args, **kwargs:
+                        subprocess.CompletedProcess([], 0, stdout=raw, stderr=b''))
+    manifest = release.image_manifest('public-image-reference')
+    assert manifest['config']['digest'] == 'sha256:example'
+    assert manifest['digest'] == 'sha256:' + hashlib.sha256(raw).hexdigest()
+
+
+def test_docker_push_error_never_echoes_the_job_token(monkeypatch):
+    import subprocess
+    monkeypatch.setenv('GH_TOKEN', 'test-only-job-token')
+    monkeypatch.setattr(release.subprocess, 'run', lambda *args, **kwargs:
+                        subprocess.CompletedProcess([], 1, stdout='',
+                            stderr='denied test-only-job-token https://example.com/private'))
+    with pytest.raises(RuntimeError) as error:
+        release.run('docker', 'push', 'public-image-reference')
+    assert 'denied' in str(error.value)
+    assert 'test-only-job-token' not in str(error.value)
+    assert 'example.com' not in str(error.value)
