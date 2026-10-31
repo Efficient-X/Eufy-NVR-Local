@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tarfile
 import tempfile
 import zipfile
 
@@ -21,12 +22,30 @@ def run(*args, environment=None, data=None):
                             env=environment, timeout=1800)
     if result.returncode:
         # Do not include registry credentials or raw authenticated API output.
-        raise RuntimeError(f'{args[0]} command failed (exit {result.returncode})')
+        detail = ''
+        if args[:2] == ('docker', 'push'):
+            detail = (result.stderr + '\n' + result.stdout)[-2000:]
+            token = os.environ.get('GH_TOKEN')
+            if token:
+                detail = detail.replace(token, '[redacted]')
+            detail = re.sub(r'https?://\S+|\b(?:gh[pousr]_|github_pat_|eyJ)[A-Za-z0-9_.-]+',
+                            '[redacted]', detail)
+        raise RuntimeError(f'{args[0]} {args[1]} failed (exit {result.returncode}) {detail}')
     return result.stdout.strip()
 
 
 def api(path):
     return json.loads(run('gh', 'api', f'repos/{REPOSITORY}/{path}'))
+
+
+def optional_api(path):
+    result = subprocess.run(['gh', 'api', f'repos/{REPOSITORY}/{path}'],
+                            capture_output=True, text=True, timeout=120)
+    if result.returncode == 0:
+        return json.loads(result.stdout)
+    if '(HTTP 404)' in result.stderr:
+        return None
+    raise RuntimeError('GitHub lookup failed; absence was not established')
 
 
 def sha256(path):
@@ -124,6 +143,97 @@ def require_absent(reference):
         raise RuntimeError('Registry lookup failed; absence was not established')
 
 
+def image_manifest(reference):
+    result = subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', reference,
+                             '--raw'], capture_output=True, timeout=120)
+    if result.returncode == 0:
+        manifest = json.loads(result.stdout)
+        manifest['digest'] = 'sha256:' + hashlib.sha256(result.stdout).hexdigest()
+        return manifest
+    if re.search(r'not found|manifest unknown|MANIFEST_UNKNOWN|NAME_UNKNOWN',
+                 result.stderr.decode('utf-8', errors='replace'), re.IGNORECASE):
+        return None
+    raise RuntimeError('Registry lookup failed; absence was not established')
+
+
+def archive_config_digest(archive, architecture, revision, version):
+    # Docker saves both classic images and OCI indices with this compatibility
+    # manifest. Read bounded metadata only; never extract or execute an image.
+    with tarfile.open(archive, 'r|gz') as source:
+        manifest = None
+        for member in source:
+            if member.name == 'manifest.json':
+                if not member.isfile() or member.size > 1024 * 1024:
+                    raise ValueError('Unexpected Docker archive manifest')
+                manifest = json.loads(source.extractfile(member).read())
+                break
+    if not isinstance(manifest, list) or len(manifest) != 1:
+        raise ValueError('Exactly one saved runtime platform is required')
+    name = manifest[0]['Config']
+    match = re.fullmatch(r'(?:blobs/sha256/([0-9a-f]{64})|([0-9a-f]{64})\.json)', name)
+    if not match:
+        raise ValueError('Unexpected archived image config identity')
+    digest = match.group(1) or match.group(2)
+    with tarfile.open(archive, 'r|gz') as source:
+        for member in source:
+            if member.name != name:
+                continue
+            if not member.isfile() or member.size > 2 * 1024 * 1024:
+                raise ValueError('Unexpected archived image config')
+            raw = source.extractfile(member).read()
+            if hashlib.sha256(raw).hexdigest() != digest:
+                raise ValueError('Archived image config bytes differ')
+            config = json.loads(raw)
+            validate_image(dict(Os=config['os'], Architecture=config['architecture'],
+                                Config=config['config']), architecture, revision, version)
+            return 'sha256:' + digest
+    raise ValueError('Archived image config is missing')
+
+
+def zip_contents(path):
+    with zipfile.ZipFile(path) as archive:
+        if len(archive.namelist()) != len(set(archive.namelist())):
+            raise ValueError('Duplicate notice archive members')
+        return {i.filename: hashlib.sha256(archive.read(i)).hexdigest()
+                for i in archive.infolist() if not i.is_dir()}
+
+
+def retain_assets(tag, assets, workspace):
+    release = api('releases/tags/' + tag)
+    existing = {a['name']: a for a in release['assets']}
+    for path in assets:
+        item = existing.get(path.name)
+        if item is None:
+            run('gh', 'release', 'upload', tag, str(path), '--repo', REPOSITORY)
+        elif item.get('digest') == 'sha256:' + sha256(path) and item['size'] == path.stat().st_size:
+            continue
+        elif path.name.endswith('.zip'):
+            # Original ZIP timestamps may differ on a retry. Verify all original
+            # member bytes, retain the published ZIP, and never overwrite it.
+            previous = workspace / ('existing-' + path.name)
+            previous.mkdir()
+            run('gh', 'release', 'download', tag, '--repo', REPOSITORY,
+                '--pattern', path.name, '--dir', str(previous))
+            if zip_contents(previous / path.name) != zip_contents(path):
+                raise ValueError('Published notice contents differ; refusing replacement')
+        else:
+            raise ValueError('Published source asset differs; refusing replacement')
+
+
+def ensure_sources(tag, revision, assets, workspace):
+    existing = optional_api('releases/tags/' + tag)
+    if existing is None:
+        run('gh', 'release', 'create', tag, '--repo', REPOSITORY, '--target', revision,
+            '--prerelease', '--title', 'Eufy NVR Local ' + tag[1:],
+            '--notes', 'Experimental prebuilt image publication is in progress. The app-store default is unchanged. Real-camera acceptance is pending. Matching sources and original notices are retained with this release.',
+            *map(str, assets))
+        return
+    ref = api('git/ref/tags/' + tag)['object']
+    if ref['type'] != 'commit' or ref['sha'] != revision or existing['draft'] or not existing['prerelease']:
+        raise ValueError('Existing release is not this exact experimental source commit')
+    retain_assets(tag, assets, workspace)
+
+
 def stage(run_id, version, revision, workspace):
     run('gh', 'run', 'download', run_id, '--repo', REPOSITORY, '--dir', str(workspace))
     assets, images = [], []
@@ -158,29 +268,31 @@ def stage(run_id, version, revision, workspace):
         images.append((arch, receipt, archive))
     # Sources become permanently accessible before any image can be made public.
     tag = 'v' + version
-    run('gh', 'release', 'create', tag, '--repo', REPOSITORY, '--target', revision,
-        '--prerelease', '--title', 'Eufy NVR Local ' + version,
-        '--notes', 'Experimental prebuilt image publication is in progress. The app-store default is unchanged. Real-camera acceptance is pending. Matching sources and original notices are retained with this release.',
-        *map(str, assets))
+    ensure_sources(tag, revision, assets, workspace)
     login()
     published = []
     for arch, receipt, archive in images:
         reference = IMAGE + ':' + version + '-' + arch
-        require_absent(reference)
+        config_digest = archive_config_digest(archive, arch, revision, version)
         run('docker', 'load', '--input', str(archive))
         metadata = json.loads(run('docker', 'image', 'inspect', receipt['image_id']))[0]
         validate_image(metadata, arch, revision, version)
-        run('docker', 'tag', receipt['image_id'], reference)
-        run('docker', 'push', reference)
-        digests = json.loads(run('docker', 'image', 'inspect', reference))[0]['RepoDigests']
-        exact = [d for d in digests if re.fullmatch(re.escape(IMAGE) + r'@sha256:[0-9a-f]{64}', d)]
-        if len(exact) != 1:
-            raise ValueError('Pushed image has no unique registry digest')
-        published.append(dict(receipt, reference=exact[0]))
+        remote = image_manifest(reference)
+        if remote is None:
+            run('docker', 'tag', receipt['image_id'], reference)
+            # A saved OCI index can also contain build attestations. Publish
+            # only its tested runtime platform; keep its exact config/layers.
+            run('docker', 'push', '--platform', 'linux/' + ARCHITECTURES[arch], reference)
+            remote = image_manifest(reference)
+        if (remote is None or remote.get('config', {}).get('digest') != config_digest
+                or not re.fullmatch(r'sha256:[0-9a-f]{64}', remote.get('digest', ''))):
+            raise ValueError('Published platform differs from its tested runtime config')
+        published.append(dict(receipt, reference=IMAGE + '@' + remote['digest'],
+                              config_digest=config_digest))
     report = workspace / 'prebuilt-images.json'
     report.write_text(json.dumps(dict(schema=1, version=version, source_revision=revision,
                                      audit_run=run_id, images=published), indent=2) + '\n')
-    run('gh', 'release', 'upload', tag, str(report), '--repo', REPOSITORY)
+    retain_assets(tag, [report], workspace)
     print('Architecture images staged. Verify public package visibility, then run promote. App-store default unchanged.')
 
 

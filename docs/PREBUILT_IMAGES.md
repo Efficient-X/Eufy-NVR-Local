@@ -109,9 +109,10 @@ This is a two-step manual process. It does not update a household installation.
    source archive and image archive against the recorded SHA-256 checksums.
 3. Staging publishes the matching source parts and original notices as permanent
    pre-release assets before pushing the two architecture images. No `latest`
-   tag is made. Existing version tags are never intentionally overwritten. If a
-   run fails after creating a release or tag, inspect that partial state; do not
-   delete or overwrite it simply to make a retry pass.
+   tag is made. Existing version tags are never intentionally overwritten. A
+   retry verifies the existing tag's exact commit, source asset hashes and all
+   original notice text before continuing. It refuses any changed published
+   source. Inspect a mismatch rather than deleting or overwriting it.
 4. The first GHCR package is private. Make this approved public software package
    public in GitHub's package settings. Do not add household credentials, camera
    pictures, configuration exports or private data to the package or release.
@@ -127,6 +128,12 @@ The publisher uses the job's short-lived GitHub token. It requires no personal
 access token. PR/source-audit jobs retain read-only repository permissions; only
 the explicitly dispatched publisher on the default branch can write packages
 and releases. The original component licences remain applicable.
+
+Native Docker runners may save either a classic image or an OCI index containing
+build attestations. Publication reads the saved runtime config digest and pushes
+one explicit runtime platform per architecture tag. It verifies that the registry
+kept that same config digest before combining the two images. This changes the
+publication wrapper, not the tested camera program or its filesystem layers.
 
 References: [HA image configuration](https://contributors.home-assistant.io/apps/reference/configuration/#image),
 [Supervisor image export](https://github.com/home-assistant/supervisor/blob/2026.10.4/supervisor/apps/app.py),
