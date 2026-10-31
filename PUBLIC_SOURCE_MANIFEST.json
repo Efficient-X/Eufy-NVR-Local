@@ -221,7 +221,7 @@
       "size": 13548
     },
     "custom_components/eufy_nvr/manifest.json": {
-      "sha256": "e9adc23665b13e2ebea5b8efb756cd0dc433ac307210dbad9ad154fbf96dbc47",
+      "sha256": "df16e906a15f4a52f8a9b33e1e91e6e9e81b84274fcc8084c97a64c430f1c187",
       "size": 474
     },
     "custom_components/eufy_nvr/snapshot.py": {
@@ -277,8 +277,8 @@
       "size": 150
     },
     "eufy_nvr/CHANGELOG.md": {
-      "sha256": "6f01b44a3a7a64fa511873472a04a1ad7a7dad2c0ee3e8691c2ad1aacac56d22",
-      "size": 27689
+      "sha256": "e501d087fee8b96052f7afa93f4ce8dabb7312dd35d2e8fe9daad33ffe138ec6",
+      "size": 28580
     },
     "eufy_nvr/DOCS.md": {
       "sha256": "bc0a127394fe8306827afb5f733daedc7923183845d2e510bcdce56128f5bebc",
@@ -433,7 +433,7 @@
       "size": 3177
     },
     "eufy_nvr/config.yaml": {
-      "sha256": "a4ecfc6a13d01c6dba67e0e1a08e297b468f8b774618f131c886db1b9f506566",
+      "sha256": "6b43d559f61a8f28a592ed5bed50661448c4fde10facd7bc2b2ff9473d717b7e",
       "size": 1518
     },
     "eufy_nvr/guided-entry.sh": {
@@ -621,7 +621,7 @@
       "size": 4706
     },
     "tests/test_public_package.py": {
-      "sha256": "4fc0ca8080a1997eb56a0d6b82ada9b441143488c4d6e8349e8e80c5c9cc7f21",
+      "sha256": "fa5f3472624d47fc8c5533535c9656d10e8418ac8a75eff0c5823036ac0bd7bc",
       "size": 2582
     },
     "tests/test_regions.py": {
@@ -725,7 +725,7 @@
       "size": 10049
     },
     "tools/stage_public_repository.py": {
-      "sha256": "6066b0766f09b67917610cff83a115e58d228e87b78392a000325e9c34ff7fc7",
+      "sha256": "b826b36cf3bf84428d861bfc92c504212908b982ba40c725f5598382401dbe13",
       "size": 12201
     },
     "tools/verify_candidate.py": {
@@ -734,5 +734,5 @@
     }
   },
   "format": 1,
-  "version": "0.8.0-alpha.1"
+  "version": "0.8.0-alpha.2"
 }
