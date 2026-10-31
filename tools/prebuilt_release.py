@@ -145,12 +145,13 @@ def require_absent(reference):
 
 def image_manifest(reference):
     result = subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', reference,
-                             '--format', '{{json .Manifest}}'],
-                            capture_output=True, text=True, timeout=120)
+                             '--raw'], capture_output=True, timeout=120)
     if result.returncode == 0:
-        return json.loads(result.stdout)
+        manifest = json.loads(result.stdout)
+        manifest['digest'] = 'sha256:' + hashlib.sha256(result.stdout).hexdigest()
+        return manifest
     if re.search(r'not found|manifest unknown|MANIFEST_UNKNOWN|NAME_UNKNOWN',
-                 result.stderr, re.IGNORECASE):
+                 result.stderr.decode('utf-8', errors='replace'), re.IGNORECASE):
         return None
     raise RuntimeError('Registry lookup failed; absence was not established')
 
