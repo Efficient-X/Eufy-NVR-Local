@@ -52,6 +52,7 @@ def candidate_config(source):
         timeout=60,
     )
     config.pop("webui", None)
+    config.pop("image", None)  # Development candidates must build their reviewed source.
     config.pop("watchdog", None)  # Docker health, not the old go2rtc-only TCP check.
     config["options"] = {key: value for key, value in source["options"].items()
                          if key in VIDEO_OPTIONS}
