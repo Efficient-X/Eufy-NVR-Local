@@ -234,6 +234,22 @@ def ensure_sources(tag, revision, assets, workspace):
     retain_assets(tag, assets, workspace)
 
 
+def loaded_image_identity(receipt, config_digest, arch, revision, version):
+    # Loading an OCI archive into the classic store changes its local identity
+    # from the saved index digest to the verified runtime config digest.
+    identities = list(dict.fromkeys((receipt['image_id'], config_digest)))
+    for identity in identities:
+        try:
+            metadata = json.loads(run('docker', 'image', 'inspect', identity))[0]
+        except RuntimeError:
+            continue
+        if metadata.get('Id') != identity:
+            raise ValueError('Loaded image identity differs')
+        validate_image(metadata, arch, revision, version)
+        return identity
+    raise ValueError('Neither verified saved image identity was loaded')
+
+
 def stage(run_id, version, revision, workspace):
     run('gh', 'run', 'download', run_id, '--repo', REPOSITORY, '--dir', str(workspace))
     assets, images = [], []
@@ -275,11 +291,10 @@ def stage(run_id, version, revision, workspace):
         reference = IMAGE + ':' + version + '-' + arch
         config_digest = archive_config_digest(archive, arch, revision, version)
         run('docker', 'load', '--input', str(archive))
-        metadata = json.loads(run('docker', 'image', 'inspect', receipt['image_id']))[0]
-        validate_image(metadata, arch, revision, version)
+        loaded_identity = loaded_image_identity(receipt, config_digest, arch, revision, version)
         remote = image_manifest(reference)
         if remote is None:
-            run('docker', 'tag', receipt['image_id'], reference)
+            run('docker', 'tag', loaded_identity, reference)
             # A saved OCI index can also contain build attestations. Publish
             # only its tested runtime platform; keep its exact config/layers.
             run('docker', 'push', '--platform', 'linux/' + ARCHITECTURES[arch], reference)
