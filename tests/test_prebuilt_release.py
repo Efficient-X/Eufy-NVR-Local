@@ -155,3 +155,32 @@ def test_docker_push_error_never_echoes_the_job_token(monkeypatch):
     assert 'denied' in str(error.value)
     assert 'test-only-job-token' not in str(error.value)
     assert 'example.com' not in str(error.value)
+
+
+@pytest.mark.parametrize('classic_store', [False, True])
+def test_loaded_archive_uses_only_verified_index_or_config_identity(monkeypatch, classic_store):
+    index, config = 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64
+    expected = config if classic_store else index
+    seen = []
+    def command(*args):
+        identity = args[-1]
+        seen.append(identity)
+        if identity != expected:
+            raise RuntimeError('Image is not in this Docker store')
+        return json.dumps([dict(Id=identity, Os='linux', Architecture='amd64', Config=dict(Labels={
+            'org.opencontainers.image.revision': REVISION,
+            'org.opencontainers.image.version': '1.0.0-alpha.1',
+            'io.hass.arch': 'amd64', 'io.hass.version': '1.0.0-alpha.1'}))])
+    monkeypatch.setattr(release, 'run', command)
+    assert release.loaded_image_identity(dict(image_id=index), config,
+        'amd64', REVISION, '1.0.0-alpha.1') == expected
+    assert seen == ([index, config] if classic_store else [index])
+
+
+def test_loaded_image_fails_closed_when_neither_identity_exists(monkeypatch):
+    def absent(*args):
+        raise RuntimeError('not found')
+    monkeypatch.setattr(release, 'run', absent)
+    with pytest.raises(ValueError, match='Neither verified'):
+        release.loaded_image_identity(dict(image_id='sha256:' + 'a' * 64),
+            'sha256:' + 'b' * 64, 'amd64', REVISION, '1.0.0-alpha.1')
