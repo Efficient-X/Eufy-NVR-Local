@@ -253,8 +253,8 @@
       "size": 11505
     },
     "docs/PREBUILT_IMAGES.md": {
-      "sha256": "568507c4a93355cfbc5006bef55a77224b18d3c761e9e01a34fa8d960381b6ec",
-      "size": 8755
+      "sha256": "414b1eab4c58b7fbe3803948ec5ad9a92561aafa84e8ee48f87bbd371eddb37f",
+      "size": 9242
     },
     "docs/PROTOCOL.md": {
       "sha256": "d68d316fce54d4d2c3cec7fe459809fb2d48f8bcecffec62787bcc68b73be04e",
@@ -601,8 +601,8 @@
       "size": 1206
     },
     "tests/test_prebuilt_release.py": {
-      "sha256": "2f823625f4a66ad30e64d4d949dfad56049229c63f41f496190a09ff704bc091",
-      "size": 4051
+      "sha256": "38dc15d51241704ab40445986c91832221f6ff95e3a3052d3c655818cd1148fc",
+      "size": 6813
     },
     "tests/test_private_diagnostics.py": {
       "sha256": "bc40a1873aee183d3c83249b7825668f083c47863cc1524bd7660e9a9e563faf",
@@ -713,8 +713,8 @@
       "size": 3339
     },
     "tools/prebuilt_release.py": {
-      "sha256": "0f9b960b36929adf25cf00d7457e9ae034154689421b5382081e0a6c6316f6ed",
-      "size": 13347
+      "sha256": "4d2a5f3b4761e06e0c885f9f6662b1591c27675c4394bcb10ba935d136b0d4c5",
+      "size": 18841
     },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
