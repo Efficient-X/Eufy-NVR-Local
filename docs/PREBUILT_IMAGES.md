@@ -8,6 +8,20 @@ not a promise to remove all the app's installed storage or improve video CPU use
 
 ## Current status
 
+Version `0.8.0-alpha.2` offers native AMD64 and ARM64 runtime images, with
+anonymous pulls checked before enabling the app-store image setting. The exact
+image bytes are from source audit `41166917442`, revision
+`d92ba525b5ad631f610b08833d4e100e531848ba`. Its matching source parts, hashes and
+original notices are retained with the release. Later publisher and app-store
+metadata fixes do not rebuild or replace those images or the source tag.
+
+Real account sign-in and live-camera hardware acceptance remain pending. An
+older working household engine is a separate implementation and must remain
+available for rollback. A passing native build does not prove that migration.
+
+The public export preserves only the reviewed EFX registry image setting.
+Development candidate exports remove it so they build their own reviewed source.
+
 The `Prebuilt image audit` workflow builds the exact existing app on native amd64
 and aarch64 runners. It tests imports, transport self-tests and synthetic Linux
 worker lifecycle without a network connection, and records software versions and
@@ -47,7 +61,7 @@ the media libraries; they do not prove real account or live-camera behaviour.
    being installed. Compare backup component sizes only after a successful change.
    Report measured savings, not the entire old app backup as a guaranteed saving.
 
-The source-only installation remains available while these steps are completed.
+The development candidate exporter remains available for source builds.
 No household credentials, backups or camera pictures belong in image evidence.
 
 ## Source collection audit
@@ -130,8 +144,10 @@ the explicitly dispatched publisher on the default branch can write packages
 and releases. The original component licences remain applicable.
 
 Native Docker runners may save either a classic image or an OCI index containing
-build attestations. Publication reads the saved runtime config digest and pushes
-one explicit runtime platform per architecture tag. It verifies that the registry
+build attestations. Import can also change the local image ID. Publication reads
+the saved runtime config digest, exports the imported platform again to prove
+that its config and layer diff IDs survived unchanged, and pushes one explicit
+runtime platform per architecture tag. It verifies that the registry
 kept that same config digest before combining the two images. This changes the
 publication wrapper, not the tested camera program or its filesystem layers.
 

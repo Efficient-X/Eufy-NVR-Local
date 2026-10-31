@@ -6,14 +6,17 @@ Live camera feeds from a Eufy PoE NVR in Home Assistant, with individual camera
 tiles that open into a larger view. A shared video player avoids opening a
 separate server pipeline for every displayed tile.
 
-**Experimental source preview.** This is for a separate test installation.
+**Experimental release.** This is for a separate test installation.
 The new licensed protocol implementation has passed synthetic and Linux build
 checks; real owner sign-in, fresh Supervisor setup, ARM and live-camera acceptance
 are still outstanding. Keep a working installation until a migration is tested.
 
-Downloadable app images are being prepared to reduce repeated software in HA
-backups. The [image build and acceptance plan](docs/PREBUILT_IMAGES.md) explains
-the checks; no prebuilt image is published yet.
+Versioned app images for AMD64 and ARM64 are available from the
+[alpha.2 release](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.2),
+alongside matching sources and original component notices. Home Assistant downloads
+the program instead of building it, avoiding repeated locally built image exports
+in backups. Actual household backup savings and live-camera acceptance are still
+unmeasured. See the [image checks and acceptance plan](docs/PREBUILT_IMAGES.md).
 
 ## What it does
 
@@ -50,8 +53,9 @@ that gives Home Assistant camera items. Install both from the same source versio
 
 1. Open the Home Assistant app store. In its menu, choose **Repositories**, add
    `https://github.com/Efficient-X/Eufy-NVR-Local`, and install
-   **Eufy NVR Local (experimental)**. This builds on your machine, so the first
-   installation takes a few minutes. No EFX prebuilt container image is published.
+   **Eufy NVR Local (experimental)**. Home Assistant downloads the versioned app
+   image for your processor. Leave it stopped while any older NVR app is running:
+   the apps use the same video ports and must not run together.
 2. In HACS, add the same URL as a **custom repository**, category **Integration**.
    Download **Eufy NVR Local**, then restart Home Assistant to load it.
 3. Start the new app. Open **Settings > Devices & services > Add integration >

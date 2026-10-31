@@ -20,8 +20,9 @@ def test_public_export_has_matching_preview_and_funding(tmp_path):
     assert config_path.read_bytes() == original
     config = yaml.safe_load((target / 'eufy_nvr/config.yaml').read_text())
     manifest = json.loads((target / 'custom_components/eufy_nvr/manifest.json').read_text())
-    assert config['version'] == manifest['version'] == '0.8.0-alpha.1'
+    assert config['version'] == manifest['version'] == '0.8.0-alpha.2'
     assert config['options']['setup_mode'] == 'guided'
+    assert config.get('image') == public.PUBLIC_IMAGE
     assert config['options']['go2rtc_password'] == ''
     assert not {'email','password','browser_session_url'}.intersection(config['options'])
     assert config['boot'] == 'manual' and config['panel_admin'] and config['homeassistant_api']
@@ -40,6 +41,22 @@ def test_public_export_refuses_overwrite(tmp_path):
     with pytest.raises(FileExistsError):
         public.stage(target)
     assert (target / 'keep.txt').read_text() == 'keep'
+
+
+def test_public_export_rejects_unreviewed_image_before_writing(tmp_path, monkeypatch):
+    read = public._read
+    def changed(root, name):
+        data = read(root, name)
+        if name == 'eufy_nvr/config.yaml':
+            config = yaml.safe_load(data)
+            config['image'] = 'example.invalid/unreviewed'
+            return yaml.safe_dump(config).encode()
+        return data
+    monkeypatch.setattr(public, '_read', changed)
+    target = tmp_path / 'preview'
+    with pytest.raises(ValueError, match='reviewed EFX registry'):
+        public.stage(target)
+    assert not target.exists()
 
 
 def test_public_verify_rejects_added_or_modified_files(tmp_path):

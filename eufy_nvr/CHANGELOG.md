@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0-alpha.2 (experimental packaging candidate)
+
+- Prepare smaller runtime images for AMD64 and ARM64. Build tools stay outside
+  the runtime; the bridge, codecs, saved-data paths and network ports are unchanged.
+- Retain the exact native-tested image bytes for publication. Preserve matching
+  sources and original component notices as permanent release assets.
+- Use a manual publisher and verify anonymous digest pulls before exposing a
+  versioned multi-architecture image to Home Assistant's app store.
+- This remains an experimental licensed-protocol port. Real owner sign-in,
+  all live lenses, tablet behaviour and household resource acceptance are still
+  required; previous acceptance of the old engine does not establish these.
+- Do not remove a working old engine or its state before controlled acceptance.
+  No guaranteed backup saving or video CPU improvement is claimed.
+
 ## 0.8.0-beta.1 (private capacity candidate)
 
 - Distinguish physical devices from lens channels. Discover reported lens counts,
