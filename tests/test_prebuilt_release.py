@@ -157,30 +157,41 @@ def test_docker_push_error_never_echoes_the_job_token(monkeypatch):
     assert 'example.com' not in str(error.value)
 
 
-@pytest.mark.parametrize('classic_store', [False, True])
-def test_loaded_archive_uses_only_verified_index_or_config_identity(monkeypatch, classic_store):
-    index, config = 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64
-    expected = config if classic_store else index
-    seen = []
+@pytest.mark.parametrize('changed_config', [False, True])
+def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkeypatch, changed_config):
+    labels = {'org.opencontainers.image.revision': REVISION,
+              'org.opencontainers.image.version': '1.0.0-alpha.1',
+              'io.hass.arch': 'aarch64', 'io.hass.version': '1.0.0-alpha.1'}
+    config = dict(os='linux', architecture='arm64', config=dict(Labels=labels),
+                  rootfs=dict(type='layers', diff_ids=['sha256:' + 'c' * 64]))
+    audited = json.dumps(config).encode()
+    expected_digest = 'sha256:' + hashlib.sha256(audited).hexdigest()
+    imported_id = 'sha256:' + 'd' * 64
+    assert imported_id != expected_digest
     def command(*args):
-        identity = args[-1]
-        seen.append(identity)
-        if identity != expected:
-            raise RuntimeError('Image is not in this Docker store')
-        return json.dumps([dict(Id=identity, Os='linux', Architecture='amd64', Config=dict(Labels={
-            'org.opencontainers.image.revision': REVISION,
-            'org.opencontainers.image.version': '1.0.0-alpha.1',
-            'io.hass.arch': 'amd64', 'io.hass.version': '1.0.0-alpha.1'}))])
+        assert '--platform' in args and 'linux/arm64' in args
+        assert args[-1] == 'eufy-source-audit:latest'
+        if args[:3] == ('docker', 'image', 'inspect'):
+            return json.dumps([dict(Id=imported_id, Os='linux', Architecture='arm64',
+                                    Config=dict(Labels=labels))])
+        assert args[:3] == ('docker', 'image', 'save')
+        # An imported image can retain its public labels while its layer content
+        # changes. A plain-tar export must match the original config hash too.
+        if changed_config:
+            config['rootfs']['diff_ids'] = ['sha256:' + 'e' * 64]
+        raw = json.dumps(config).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        filename = digest + '.json'
+        with tarfile.open(args[args.index('--output') + 1], 'w') as archive:
+            for name, content in [(filename, raw), ('manifest.json', json.dumps([dict(Config=filename)]).encode())]:
+                member = tarfile.TarInfo(name)
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+        return ''
     monkeypatch.setattr(release, 'run', command)
-    assert release.loaded_image_identity(dict(image_id=index), config,
-        'amd64', REVISION, '1.0.0-alpha.1') == expected
-    assert seen == ([index, config] if classic_store else [index])
-
-
-def test_loaded_image_fails_closed_when_neither_identity_exists(monkeypatch):
-    def absent(*args):
-        raise RuntimeError('not found')
-    monkeypatch.setattr(release, 'run', absent)
-    with pytest.raises(ValueError, match='Neither verified'):
-        release.loaded_image_identity(dict(image_id='sha256:' + 'a' * 64),
-            'sha256:' + 'b' * 64, 'amd64', REVISION, '1.0.0-alpha.1')
+    if changed_config:
+        with pytest.raises(ValueError, match='Loaded runtime config differs'):
+            release.loaded_image_identity(expected_digest, 'aarch64', REVISION, '1.0.0-alpha.1', tmp_path)
+    else:
+        assert release.loaded_image_identity(expected_digest, 'aarch64', REVISION,
+            '1.0.0-alpha.1', tmp_path) == imported_id
