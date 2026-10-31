@@ -56,3 +56,4 @@ ingress_port: 0
 panel_admin: true
 homeassistant_api: true
 timeout: 60
+image: ghcr.io/efficient-x/eufy-nvr-local
