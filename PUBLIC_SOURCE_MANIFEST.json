@@ -601,8 +601,8 @@
       "size": 1206
     },
     "tests/test_prebuilt_release.py": {
-      "sha256": "b3ea2c8eb4c07bce3a97cc89549cc86464a573d5aa1eb1f24fab865ec7507aa0",
-      "size": 7995
+      "sha256": "6b347c74b0c27488e61aa8c58e4961cbff9ca5aaa719b8ce4d1502299fc720e3",
+      "size": 9403
     },
     "tests/test_private_diagnostics.py": {
       "sha256": "bc40a1873aee183d3c83249b7825668f083c47863cc1524bd7660e9a9e563faf",
@@ -713,8 +713,8 @@
       "size": 3339
     },
     "tools/prebuilt_release.py": {
-      "sha256": "83569a821ee0ddb4574377508af38d553aac07cf0595ae9f026c0add3e6af625",
-      "size": 18922
+      "sha256": "ccbd4cf7adcce44634e82dbe0a1baaa404426fa3caf94ea22875efd3ef881a0d",
+      "size": 19610
     },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
