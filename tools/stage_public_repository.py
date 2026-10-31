@@ -14,6 +14,7 @@ import stage_guided_candidate as guided
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.8.0-alpha.2"
+PUBLIC_IMAGE = "ghcr.io/efficient-x/eufy-nvr-local"
 MANIFEST = "PUBLIC_SOURCE_MANIFEST.json"
 SOURCE_FILES = (
     '.gitattributes',
@@ -221,7 +222,13 @@ def stage(destination, *, root=ROOT):
             raise ValueError("Packaged bridge differs from source")
     if files["frontend/eufy-shared-tiles.js"] != files["custom_components/eufy_nvr/www/eufy-shared-tiles.js"]:
         raise ValueError("Packaged frontend differs from source")
-    config = guided.candidate_config(yaml.safe_load(files["eufy_nvr/config.yaml"]))
+    source_config = yaml.safe_load(files["eufy_nvr/config.yaml"])
+    image = source_config.get("image")
+    if image not in (None, PUBLIC_IMAGE):
+        raise ValueError("Public image must be the reviewed EFX registry")
+    config = guided.candidate_config(source_config)
+    if image is not None:
+        config["image"] = image
     config.update(name="Eufy NVR Local (experimental)", version=VERSION,
                   url="https://github.com/Efficient-X/Eufy-NVR-Local")
     files["eufy_nvr/config.yaml"] = yaml.safe_dump(config,sort_keys=False).encode()
