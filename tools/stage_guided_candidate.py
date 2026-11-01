@@ -27,7 +27,8 @@ TOP_FILES = ("Dockerfile", "run.sh", "guided-entry.sh", ".dockerignore",
              "licenses/eufy-sdk-APACHE-2.0.txt", "licenses/eufy-sdk-PROVENANCE.md",
              "licenses/EFX-MIT-LICENSE.txt")
 FRONTEND_FILES = ("eufy-shared-tiles.js", "README.md")
-TEST_TOOLS = ("linux_candidate_smoke.py", "verify_candidate.py", "image_video_smoke.py")
+TEST_TOOLS = ("linux_candidate_smoke.py", "verify_candidate.py", "image_video_smoke.py",
+              "s6_guided_entrypoint_smoke.py")
 COMPONENT_FILES = (
     "__init__.py", "app_connection.py", "camera.py", "config_flow.py", "const.py",
     "coordinator.py", "diagnostics.py", "go2rtc_api.py", "manifest.json",
