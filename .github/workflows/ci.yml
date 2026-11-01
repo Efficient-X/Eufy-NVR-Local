@@ -85,6 +85,8 @@ jobs:
             --pids-limit 64 --memory 512m --cpus 2 \
             --mount "type=bind,source=$PWD/.ci-guided/test_tools/linux_candidate_smoke.py,target=/smoke.py,readonly" \
             --entrypoint python3 eufy-guided-test /smoke.py
+      - name: Exercise actual S6 guided worker and legacy guard (synthetic state only)
+        run: python3 .ci-guided/test_tools/s6_guided_entrypoint_smoke.py --image eufy-guided-test
       - name: Record built dependency versions for distribution review
         run: |
           docker run --rm --network none --entrypoint dpkg-query eufy-guided-test -W
