@@ -97,6 +97,13 @@ jobs:
           revision = os.environ['SOURCE_REVISION']
           version = os.environ['APP_VERSION']
           platform = 'linux/' + release.ARCHITECTURES[arch]
+          server_api = release.run('docker', 'version', '--format', '{{.Server.APIVersion}}')
+          inspect_help = release.run('docker', 'image', 'inspect', '--help')
+          if tuple(map(int, server_api.split('.'))) < (1, 49) or '--platform' not in inspect_help:
+              print('Publisher import smoke not supported by this native runner:',
+                    arch, 'Docker API', server_api, '(platform inspect requires API 1.49).',
+                    'Native app, codec and lifecycle tests remain required; publication uses the supported Docker runner.')
+              sys.exit(0)
           with tempfile.TemporaryDirectory(prefix='efx-import-smoke-') as folder:
               root = Path(folder)
               original = root / 'original.tar'
