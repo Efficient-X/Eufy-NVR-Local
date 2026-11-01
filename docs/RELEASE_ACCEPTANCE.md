@@ -1,13 +1,16 @@
 # From development package to a usable release
 
-Status: **28 October 2026 - experimental source publication authorised; stable
-release acceptance remains incomplete.** The latest sealed build candidate is
-`0.8.0-dev.10`; subsequent documentation/source corrections are being prepared
-for a private `0.8.0-alpha.1` repository preview. Household apps are unchanged.
+Status: **1 November 2026 - experimental; stable acceptance incomplete.**
+Alpha.5's real owner sign-in passed, but its guided video worker FAILED to start.
+The old engine was restored and all eight existing views were verified fresh.
+The alpha.5 tag and images remain unchanged. Alpha.6 is a distinct corrective
+candidate; its native container-entrypoint and real-camera checks are pending.
 
-Completed evidence includes amd64 builds, isolated Linux lifecycle/health,
+Completed evidence includes native AMD64/ARM64 builds, isolated Linux lifecycle/health,
 synthetic protocol compatibility, isolated Core integration checks and automated
-suites. These do not replace real sign-in, Supervisor or new-port camera tests.
+suites. Earlier lifecycle checks substituted the worker and missed the real S6
+environment-restoration failure. Alpha.6 adds that actual entrypoint regression;
+synthetic success still does not replace new-engine live-camera acceptance.
 
 ## What still has to happen
 
