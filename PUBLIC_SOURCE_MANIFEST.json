@@ -25,8 +25,8 @@
       "size": 2039
     },
     ".github/workflows/source-audit.yml": {
-      "sha256": "7c1bad3fb04f968d545ad514ea98ca8c47887ae75bbe27dc17b41db39933a564",
-      "size": 11444
+      "sha256": "8e8bb063cfb1f08f93fd56d6ccd484f1ad7c39ada52b3ccda55eaee7bf7b7031",
+      "size": 11012
     },
     ".gitignore": {
       "sha256": "bdef3e9b343ba31d98c8eb96dac66e2140dd814c109dcbbe5cff55c13c083150",
@@ -601,8 +601,8 @@
       "size": 1206
     },
     "tests/test_prebuilt_release.py": {
-      "sha256": "8403a302d7a54154ae063e566208f4be445001d0bf875dd5699dd299a01c4d01",
-      "size": 21275
+      "sha256": "cc15cba1571f47f3743b10412f365c0097988850008b01e66e864aea1b098c30",
+      "size": 22160
     },
     "tests/test_private_diagnostics.py": {
       "sha256": "bc40a1873aee183d3c83249b7825668f083c47863cc1524bd7660e9a9e563faf",
@@ -713,8 +713,8 @@
       "size": 3339
     },
     "tools/prebuilt_release.py": {
-      "sha256": "6310eea609f65882cafe67650a09bb0000d65d3013398f001d59f98bb6b18b38",
-      "size": 22275
+      "sha256": "3563eb0f70abbdc54f524456dae3e16249ac9943f7b0e925663d147e5c5a07ef",
+      "size": 23095
     },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
