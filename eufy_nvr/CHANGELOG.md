@@ -1,4 +1,8 @@
-# 0.8.0-alpha.4 — unpublished local candidate
+# 0.8.0-alpha.5 — corrective experimental candidate
+
+- Supersede the withdrawn alpha.4 publication without moving its public tag.
+- Retain the reviewed setup and recovery implementation; rebuild and test
+  both architectures with matching alpha.5 versions and source receipts.
 
 - Reopen completed local setup with a new local session; retain saved Eufy access.
 - Preserve expiry for active sign-in, picture challenges and email-code steps.
