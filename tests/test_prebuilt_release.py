@@ -158,7 +158,8 @@ def test_docker_push_error_never_echoes_the_job_token(monkeypatch):
 
 
 @pytest.mark.parametrize('changed_config', [False, True])
-def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkeypatch, changed_config):
+@pytest.mark.parametrize('api_versions', ['1.49 1.49', '1.49 1.48', '1.48 1.49'])
+def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkeypatch, changed_config, api_versions):
     labels = {'org.opencontainers.image.revision': REVISION,
               'org.opencontainers.image.version': '1.0.0-alpha.1',
               'io.hass.arch': 'aarch64', 'io.hass.version': '1.0.0-alpha.1'}
@@ -169,12 +170,15 @@ def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkey
     imported_id = 'sha256:' + 'd' * 64
     assert imported_id != expected_digest
     def command(*args):
-        assert '--platform' in args and 'linux/arm64' in args
+        if args[:3] == ('docker', 'version', '--format'):
+            return api_versions
         assert args[-1] == 'eufy-source-audit:latest'
         if args[:3] == ('docker', 'image', 'inspect'):
+            assert ('--platform' in args) == (api_versions == '1.49 1.49')
             return json.dumps([dict(Id=imported_id, Os='linux', Architecture='arm64',
                                     Config=dict(Labels=labels))])
         assert args[:3] == ('docker', 'image', 'save')
+        assert '--platform' in args and 'linux/arm64' in args
         # An imported image can retain its public labels while its layer content
         # changes. A plain-tar export must match the original config hash too.
         if changed_config:
@@ -195,6 +199,20 @@ def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkey
     else:
         assert release.loaded_image_identity(expected_digest, 'aarch64', REVISION,
             '1.0.0-alpha.1', tmp_path) == imported_id
+
+
+@pytest.mark.parametrize('api_versions', ['1.47 1.47', 'unknown', '1.49 unknown'])
+def test_unverified_or_too_old_docker_api_cannot_skip_identity_checks(tmp_path, monkeypatch, api_versions):
+    calls = []
+    def command(*args):
+        calls.append(args)
+        assert args[:3] == ('docker', 'version', '--format')
+        return api_versions
+    monkeypatch.setattr(release, 'run', command)
+    with pytest.raises(ValueError, match='Docker API'):
+        release.loaded_image_identity('sha256:' + 'c' * 64, 'amd64', REVISION,
+                                      '1.0.0-alpha.1', tmp_path)
+    assert len(calls) == 1
 
 
 VERSION = '1.0.0-alpha.1'
@@ -366,8 +384,8 @@ def test_release_metadata_is_authoritative_not_target_label(publication_state, c
     assert state['calls'] == []
 
 
-@pytest.mark.parametrize('drift_arch', ['amd64', 'aarch64'])
-def test_changed_ref_before_either_architecture_stops_its_image_push(
+@pytest.mark.parametrize('drift_arch', [None, 'amd64', 'aarch64'])
+def test_store_scoped_ids_are_not_tag_sources_and_ref_drift_stops_the_affected_push(
         tmp_path, monkeypatch, publication_state, drift_arch):
     state = publication_state
     state['ref'] = state['make_ref']()
@@ -392,7 +410,12 @@ def test_changed_ref_before_either_architecture_stops_its_image_push(
             return ''
         if args[0] == 'docker':
             state['calls'].append((args, kwargs))
-            if args[1] == 'load' and 'linux/' + release.ARCHITECTURES[drift_arch] in args:
+            if args[1] == 'tag':
+                # Docker 29 can inspect/export a platform by the local name
+                # while its platform-scoped ID is not a globally taggable ID.
+                assert args[2] == 'eufy-source-audit:latest'
+            if (args[1] == 'load' and drift_arch is not None
+                    and 'linux/' + release.ARCHITECTURES[drift_arch] in args):
                 state['ref'] = state['make_ref']('2' * 40)
             if args[1] == 'push':
                 published.add(args[-1])
@@ -406,7 +429,14 @@ def test_changed_ref_before_either_architecture_stops_its_image_push(
     monkeypatch.setattr(release, 'image_manifest', lambda reference:
         dict(config=dict(digest=config_digest), digest='sha256:' + 'e' * 64)
         if reference in published else None)
-    with pytest.raises(ValueError, match='exact experimental source commit'):
+    if drift_arch is None:
         release.stage('123', VERSION, REVISION, tmp_path)
-    assert len(published) == (0 if drift_arch == 'amd64' else 1)
-    assert release.IMAGE + ':' + VERSION + '-' + drift_arch not in published
+        report = json.loads((tmp_path / 'prebuilt-images.json').read_text())
+        assert {entry['architecture'] for entry in report['images']} == {'amd64', 'aarch64'}
+        assert all(entry['config_digest'] == config_digest for entry in report['images'])
+        assert len(published) == 2
+    else:
+        with pytest.raises(ValueError, match='exact experimental source commit'):
+            release.stage('123', VERSION, REVISION, tmp_path)
+        assert len(published) == (0 if drift_arch == 'amd64' else 1)
+        assert release.IMAGE + ':' + VERSION + '-' + drift_arch not in published
