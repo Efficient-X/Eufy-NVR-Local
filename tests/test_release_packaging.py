@@ -33,7 +33,7 @@ class ReleasePackagingTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
         self.assertEqual((addon_version, manifest_version),
-                         ("0.8.0-alpha.4", "0.8.0-alpha.4"))
+                         ("0.8.0-alpha.5", "0.8.0-alpha.5"))
         self.assertFalse((ROOT / "eufy_nvr/build.yaml").exists())
         self.assertRegex(
             dockerfile,
