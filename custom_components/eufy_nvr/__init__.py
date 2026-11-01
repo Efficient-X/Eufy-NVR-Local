@@ -70,16 +70,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufyNvrConfigEntry) -> b
 
     entry.async_on_unload(await async_register_card(hass, entry.entry_id))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    primer = hass.async_create_task(
+    # This retry loop lives for the entry's lifetime. Register it as background
+    # work so HA's startup barrier does not wait forever; the entry owns its
+    # cancellation on unload and shutdown.
+    entry.async_create_background_task(
+        hass,
         coordinator.async_prime_frames_forever(),
         f"{DOMAIN} snapshot primer",
     )
-
-    def _cancel_primer() -> None:
-        """Stop background priming without returning Task.cancel's boolean."""
-        primer.cancel()
-
-    entry.async_on_unload(_cancel_primer)
     return True
 
 

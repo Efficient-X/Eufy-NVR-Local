@@ -181,7 +181,7 @@ async def test_media_worker_owns_one_group_and_drops_inherited_tokens(monkeypatc
     worker = guided_launcher.MediaWorker()
     monkeypatch.setattr(worker, "port_open", AsyncMock(side_effect=[False, True]))
     await worker.start()
-    assert spawn.await_args.args == ("/run.sh",)
+    assert spawn.await_args.args == ("/run.sh", "--guided-worker")
     assert spawn.await_args.kwargs["start_new_session"] is True
     assert "SUPERVISOR_TOKEN" not in spawn.await_args.kwargs["env"]
     assert "EUFY_PASSWORD" not in spawn.await_args.kwargs["env"]

@@ -69,6 +69,13 @@ jobs:
             --pids-limit 64 --memory 512m --cpus 2 \
             --mount "type=bind,source=$PWD/tools/linux_candidate_smoke.py,target=/smoke.py,readonly" \
             --entrypoint python3 eufy-source-audit /smoke.py
+      - name: Reproduce the published environment-marker failure through real S6
+        run: |
+          baseline="ghcr.io/efficient-x/eufy-nvr-local@sha256:5cb5e420b2eb287faf1501b5f91f7f649e0365c29fa9b6b77f63a0612056ba8b"
+          docker pull "$baseline"
+          python3 tools/s6_guided_entrypoint_smoke.py --image "$baseline" --expect-env-marker-failure
+      - name: Verify real S6 guided startup, isolated secrets and strict legacy mode
+        run: python3 tools/s6_guided_entrypoint_smoke.py --image eufy-source-audit
       - name: Check S6 container stop with a synthetic worker
         run: |
           cid="$(docker run --detach --network none --pids-limit 64 --memory 512m --cpus 2 \

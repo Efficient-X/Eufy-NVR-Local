@@ -13,9 +13,9 @@ import yaml
 import stage_guided_candidate as guided
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0-alpha.5"
+VERSION = "0.8.0-alpha.6"
 # Unpublished app/integration UX candidate; never retarget published tags/images.
-APP_VERSION = "0.8.0-alpha.5"
+APP_VERSION = "0.8.0-alpha.6"
 PUBLIC_IMAGE = "ghcr.io/efficient-x/eufy-nvr-local"
 MANIFEST = "PUBLIC_SOURCE_MANIFEST.json"
 SOURCE_FILES = (
@@ -163,7 +163,7 @@ SOURCE_FILES = (
     'tests/test_hardening_api.py',
     'tests/test_hardening_generator.py',
     'tests/test_hardening_snapshot.py',
-    'tests/test_integration_unload.py',
+    'tests/test_integration_startup.py',
     'tests/test_linux_candidate_smoke.py',
     'tests/test_media_route.py',
     'tests/test_multichannel_probe.py',
@@ -192,6 +192,7 @@ SOURCE_FILES = (
     'tests/test_video_startup.py',
     'tests/test_video_timing_integration.py',
     'tools/linux_candidate_smoke.py',
+    'tools/s6_guided_entrypoint_smoke.py',
     'tools/stage_guided_candidate.py',
     'tools/stage_public_repository.py',
     'tools/verify_candidate.py',

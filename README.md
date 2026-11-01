@@ -1,6 +1,6 @@
-> **UNPUBLISHED LOCAL CANDIDATE — NOT INSTALLED.** Alpha.4 source below is for
-> review and isolated tests. No alpha.4 app image is published. Native image,
-> Home Assistant and hardware acceptance are still required before deployment.
+> **Experimental alpha.6 candidate — live-video acceptance pending.** Alpha.5
+> passed a real owner sign-in but its guided video worker failed to start. Keep
+> an existing working camera setup until the replacement passes live tests.
 
 # Eufy NVR Local
 
@@ -12,15 +12,17 @@ separate server pipeline for every displayed tile.
 
 **Experimental release.** This is for a separate test installation.
 The new licensed protocol implementation has passed synthetic and Linux build
-checks; real owner sign-in, fresh Supervisor setup, ARM and live-camera acceptance
-are still outstanding. Keep a working installation until a migration is tested.
+checks. Alpha.5 owner sign-in and rollback were exercised, but its new video
+engine was not accepted. Fresh installation, alpha.6 native entrypoint checks
+and live-camera acceptance remain separate gates.
 
-Versioned app images for AMD64 and ARM64 are available from the
-[alpha.2 release](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.2),
-alongside matching sources and original component notices. Home Assistant downloads
-the program instead of building it, avoiding repeated locally built image exports
-in backups. Actual household backup savings and live-camera acceptance are still
-unmeasured. See the [image checks and acceptance plan](docs/PREBUILT_IMAGES.md).
+Versioned app images, their matching sources and original component notices are
+listed in [Releases](https://github.com/Efficient-X/Eufy-NVR-Local/releases).
+Alpha.5 images are published, but have a known guided-worker startup failure;
+their availability is not a working-camera recommendation. Alpha.4 is withdrawn.
+Alpha.6 images must pass their own native checks and publication gates before
+installation. Downloaded images avoid rebuilding on HA; they do not guarantee
+lower video CPU use. See the [image checks and acceptance plan](docs/PREBUILT_IMAGES.md).
 
 ## What it does
 
@@ -53,12 +55,12 @@ route diagnostic before describing your connection as LAN-only or offline.
 ## Install the preview
 
 There are two parts: an **app** that brings in the video, and an **integration**
-that gives Home Assistant camera items. The current tested source pair is
-**integration 0.8.0-alpha.5 with app 0.8.0-alpha.5** in this local candidate.
-It improves app selection, local-session expiry, completed-session reopening,
-post-backup migration preflight and video-port conflict messages. This is not
-an installed or published release, and it does not yet implement the entire
-single-configuration installation design.
+that gives Home Assistant camera items. The candidate source pair is
+**integration 0.8.0-alpha.6 with app 0.8.0-alpha.6** in this local candidate.
+It carries guided-worker mode through the real container startup wrapper and
+moves the lifetime snapshot task out of HA's startup barrier. Existing local
+credentials and saved account data stay in place. This source is not yet a
+hardware-accepted release and does not implement automatic old-app migration.
 
 1. Open the Home Assistant app store. In its menu, choose **Repositories**, add
    `https://github.com/Efficient-X/Eufy-NVR-Local`, and install

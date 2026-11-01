@@ -14,7 +14,16 @@ cd "${BRIDGE_DIR}"
 
 LOG_LEVEL="$(bashio::config 'log_level' 'info')"
 export EUFY_LOG_LEVEL="${LOG_LEVEL}"
-GUIDED_WORKER="${EUFY_GUIDED_WORKER:-0}"
+# with-contenv restores the container environment before this script runs.
+# A child-only environment marker can be lost; an explicit non-secret argument
+# survives that wrapper. Never let an inherited variable bypass legacy auth.
+GUIDED_WORKER=0
+if [ "$#" -eq 1 ] && [ "$1" = "--guided-worker" ]; then
+    GUIDED_WORKER=1
+elif [ "$#" -ne 0 ]; then
+    bashio::log.fatal "Unsupported video-worker startup mode."
+    exit 2
+fi
 
 if [ "${GUIDED_WORKER}" != 1 ] && { ! bashio::config.has_value 'email' || ! bashio::config.has_value 'password'; }; then
     bashio::log.fatal "Set 'email' and 'password' (your eufy account) in the add-on configuration."

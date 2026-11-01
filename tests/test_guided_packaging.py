@@ -1,4 +1,5 @@
 """Candidate staging copies reviewed source only; it never deploys."""
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -13,6 +14,44 @@ spec.loader.exec_module(stage)
 verify_spec = importlib.util.spec_from_file_location("verify_candidate", ROOT / "tools/verify_candidate.py")
 transfer_verifier = importlib.util.module_from_spec(verify_spec)
 verify_spec.loader.exec_module(transfer_verifier)
+
+
+def test_real_entrypoint_fixture_matches_packaged_defaults_and_schema():
+    """Catch incomplete synthetic options before an expensive native build."""
+    module = ast.parse((ROOT / "tools/s6_guided_entrypoint_smoke.py").read_text())
+    inside = next(node for node in module.body
+                  if isinstance(node, ast.AsyncFunctionDef) and node.name == "inside")
+    options = next(node.value for node in inside.body if isinstance(node, ast.Assign)
+                   and any(isinstance(target, ast.Name) and target.id == "options"
+                           for target in node.targets))
+    password = next(ast.literal_eval(node.value) for node in module.body
+                    if isinstance(node, ast.Assign) and
+                    any(isinstance(target, ast.Name) and target.id == "FIXTURE_PASSWORD"
+                        for target in node.targets))
+    class LiteralsOnly(ast.NodeTransformer):
+        def visit_Name(self, node):
+            assert node.id == "FIXTURE_PASSWORD"
+            return ast.Constant(value=password)
+    fixture = ast.literal_eval(LiteralsOnly().visit(options))
+    config = yaml.safe_load((ROOT / "eufy_nvr/config.yaml").read_text())
+    defaults, schema = config["options"], config["schema"]
+    assert set(defaults) <= set(fixture)
+    assert set(fixture) <= set(defaults) | {"rtsp_port", "grid_columns"}
+    overrides = {"go2rtc_username", "go2rtc_password", "log_level", "adaptive_warm_seconds"}
+    for name in set(defaults) - overrides:
+        assert fixture[name] == defaults[name], name
+    for name, value in fixture.items():
+        rule = schema[name].removesuffix("?")
+        if rule == "bool":
+            assert type(value) is bool, name
+        elif rule.startswith("int("):
+            lower, upper = map(int, rule[4:-1].split(","))
+            assert type(value) is int and lower <= value <= upper, name
+        elif rule.startswith("list("):
+            assert value in rule[5:-1].split("|"), name
+        else:
+            assert rule in {"str", "password"} and isinstance(value, str), name
+    assert 16 <= len(fixture["go2rtc_password"]) <= 256
 
 
 def test_staged_candidate_is_explicit_and_does_not_change_release(tmp_path):

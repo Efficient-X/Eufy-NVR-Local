@@ -1,4 +1,4 @@
-"""Candidate guided entry point. Not enabled by the current app configuration."""
+"""Guided setup entry point and isolated video-worker lifecycle."""
 from __future__ import annotations
 
 import argparse
@@ -116,7 +116,7 @@ class MediaWorker:
             from process_ownership import OwnedProcesses, require_support
             require_support()  # Refuse to launch a tree we cannot safely track.
         self.process = await asyncio.create_subprocess_exec(
-            "/run.sh", env=child_environment(os.environ), start_new_session=True,
+            "/run.sh", "--guided-worker", env=child_environment(os.environ), start_new_session=True,
         )
         try:
             if sys.platform.startswith("linux"):

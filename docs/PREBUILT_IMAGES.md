@@ -8,16 +8,20 @@ not a promise to remove all the app's installed storage or improve video CPU use
 
 ## Current status
 
-Version `0.8.0-alpha.2` offers native AMD64 and ARM64 runtime images, with
-anonymous pulls checked before enabling the app-store image setting. The exact
-image bytes are from source audit `41166917442`, revision
-`d92ba525b5ad631f610b08833d4e100e531848ba`. Its matching source parts, hashes and
-original notices are retained with the release. Later publisher and app-store
-metadata fixes do not rebuild or replace those images or the source tag.
+Version `0.8.0-alpha.5` has native AMD64 and ARM64 runtime images, with anonymous
+digest pulls verified before promotion. Its source audit is `41282227828`, source
+revision `a06c16f446a717a18d67b9a050d359e424751f20`, and combined image digest
+`sha256:5cb5e420b2eb287faf1501b5f91f7f649e0365c29fa9b6b77f63a0612056ba8b`.
+Matching sources, hashes and original notices are retained with the
+[alpha.5 release](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.5).
+That image passed a real owner sign-in but FAILED guided video-worker startup.
+It is not a hardware-accepted camera release. Alpha.4 is withdrawn; alpha.2 is
+an older packaging candidate, not the current installation target.
 
-Real account sign-in and live-camera hardware acceptance remain pending. An
-older working household engine is a separate implementation and must remain
-available for rollback. A passing native build does not prove that migration.
+Alpha.6 is a separate corrective candidate. Its exact source, native entrypoint
+checks, image identities and hardware outcome must be recorded independently;
+alpha.5's published bytes and tag must never be silently replaced. The older
+working engine remains available for rollback until new live-camera acceptance.
 
 The public export preserves only the reviewed EFX registry image setting.
 Development candidate exports remove it so they build their own reviewed source.

@@ -1,5 +1,5 @@
 name: Eufy NVR Local (experimental)
-version: 0.8.0-alpha.5
+version: 0.8.0-alpha.6
 slug: eufy_nvr
 description: Live video from a eufy PoE NVR (S4 / T8N00), served as RTSP/WebRTC for
   Home Assistant. Eufy internet login and signalling are required; verify the selected
