@@ -20,8 +20,8 @@ def test_public_export_has_matching_preview_and_funding(tmp_path):
     assert config_path.read_bytes() == original
     config = yaml.safe_load((target / 'eufy_nvr/config.yaml').read_text())
     manifest = json.loads((target / 'custom_components/eufy_nvr/manifest.json').read_text())
-    assert config['version'] == public.APP_VERSION == '0.8.0-alpha.4'
-    assert manifest['version'] == public.VERSION == '0.8.0-alpha.4'
+    assert config['version'] == public.APP_VERSION == '0.8.0-alpha.5'
+    assert manifest['version'] == public.VERSION == '0.8.0-alpha.5'
     assert config['options']['setup_mode'] == 'guided'
     assert config.get('image') == public.PUBLIC_IMAGE
     assert config['options']['go2rtc_password'] == ''
