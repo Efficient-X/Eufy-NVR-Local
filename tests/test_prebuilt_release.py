@@ -195,3 +195,218 @@ def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkey
     else:
         assert release.loaded_image_identity(expected_digest, 'aarch64', REVISION,
             '1.0.0-alpha.1', tmp_path) == imported_id
+
+
+VERSION = '1.0.0-alpha.1'
+TAG = 'v' + VERSION
+
+
+@pytest.fixture
+def publication_state(monkeypatch):
+    import base64
+    state = dict(ref=None, release=None, calls=[], events=[])
+    def ref(sha=REVISION):
+        return dict(ref='refs/tags/' + TAG, object=dict(type='commit', sha=sha))
+    state['make_ref'] = ref
+    def lookup(path):
+        state['events'].append(('get', path))
+        if path.startswith('contents/'):
+            assert path.endswith('?ref=' + REVISION)
+            raw = (json.dumps(dict(version=state.get('source_version', VERSION)))
+                   if '/manifest.json?' in path else 'version: ' + state.get('app_version', VERSION) + '\n')
+            return dict(encoding='base64', content=base64.b64encode(raw.encode()).decode())
+        if path == 'git/ref/tags/' + TAG:
+            if state.get('lookup_error'):
+                raise RuntimeError('Reference lookup failed')
+            return state['ref']
+        if path == 'releases/tags/' + TAG:
+            return state['release']
+        pytest.fail('Unexpected API read: ' + path)
+    def command(*args, **kwargs):
+        state['calls'].append((args, kwargs))
+        state['events'].append(('command', args))
+        if args[:4] == ('gh', 'api', '--method', 'POST'):
+            assert args[4:] == (f'repos/{release.REPOSITORY}/git/refs', '--input', '-')
+            assert json.loads(kwargs['data']) == dict(ref='refs/tags/' + TAG, sha=REVISION)
+            state['ref'] = ref(state.get('created_sha', REVISION))
+            if state.get('fail_read_after_post'):
+                state['lookup_error'] = True
+        elif args[:3] == ('gh', 'release', 'create'):
+            assert state['ref'] == ref()
+            assert '--verify-tag' in args and '--target' not in args
+            state['release'] = dict(tag_name=TAG, draft=False, prerelease=True, assets=[])
+            if state.get('change_after_release'):
+                state['ref'] = ref('2' * 40)
+        else:
+            pytest.fail('Unexpected public write: ' + repr(args))
+        return ''
+    monkeypatch.setattr(release, 'api', lookup)
+    monkeypatch.setattr(release, 'optional_api', lookup)
+    monkeypatch.setattr(release, 'run', command)
+    return state
+
+
+def test_prepare_creates_explicit_sha_then_reads_back_without_release_or_image(publication_state):
+    state = publication_state
+    release.prepare_tag(VERSION, REVISION)
+    assert len(state['calls']) == 1
+    assert state['events'][-1] == ('get', 'git/ref/tags/' + TAG)
+    assert state['release'] is None
+
+
+def test_prepare_is_idempotent_for_existing_exact_ref(publication_state):
+    state = publication_state
+    state['ref'] = state['make_ref']()
+    release.prepare_tag(VERSION, REVISION)
+    assert state['calls'] == []
+
+
+def test_prepare_cli_finishes_without_staging_or_promoting(monkeypatch):
+    calls = []
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    monkeypatch.setattr(sys, 'argv', ['prebuilt_release.py', 'prepare',
+                                    '--audit-run', '123', '--version', VERSION])
+    monkeypatch.setattr(release, 'audit_revision', lambda run_id: REVISION)
+    monkeypatch.setattr(release, 'prepare_tag', lambda *args: calls.append(args))
+    monkeypatch.setattr(release, 'stage', lambda *args: pytest.fail('Prepare must not stage'))
+    monkeypatch.setattr(release, 'promote', lambda *args: pytest.fail('Prepare must not promote'))
+    release.main()
+    assert calls == [(VERSION, REVISION)]
+
+
+def test_prepare_workflow_preserves_existing_permission_boundary():
+    import yaml
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / '.github/workflows/publish-prebuilt.yml').read_text())
+    events = workflow.get('on', workflow.get(True))
+    assert events['workflow_dispatch']['inputs']['operation']['options'] == ['prepare', 'stage', 'promote']
+    assert workflow['jobs']['publish']['permissions'] == {
+        'actions': 'read', 'contents': 'write', 'packages': 'write'}
+    assert workflow['permissions'] == {'contents': 'read'}
+    assert 'github.event.repository.default_branch' in workflow['jobs']['publish']['if']
+
+
+def test_wrong_existing_ref_is_never_retargeted(publication_state):
+    state = publication_state
+    state['ref'] = state['make_ref']('2' * 40)
+    with pytest.raises(ValueError, match='exact experimental source commit'):
+        release.prepare_tag(VERSION, REVISION)
+    assert state['calls'] == []
+
+
+def test_post_success_cannot_substitute_for_authoritative_ref_readback(publication_state):
+    state = publication_state
+    state['created_sha'] = '2' * 40
+    with pytest.raises(ValueError, match='exact experimental source commit'):
+        release.prepare_tag(VERSION, REVISION)
+    assert len(state['calls']) == 1 and state['release'] is None
+
+
+def test_uncertain_post_outcome_is_not_retried(publication_state):
+    state = publication_state
+    state['fail_read_after_post'] = True
+    with pytest.raises(RuntimeError, match='lookup failed'):
+        release.prepare_tag(VERSION, REVISION)
+    assert len(state['calls']) == 1 and state['release'] is None
+
+
+@pytest.mark.parametrize('field', ['source_version', 'app_version'])
+def test_prepare_rejects_wrong_source_version_before_any_write(publication_state, field):
+    state = publication_state
+    state[field] = '1.0.0-alpha.2'
+    with pytest.raises(ValueError, match='package versions differ'):
+        release.prepare_tag(VERSION, REVISION)
+    assert state['calls'] == []
+
+
+@pytest.mark.parametrize('identity', [
+    dict(ref='refs/tags/' + TAG, object=dict(type='tag', sha=REVISION)),
+    dict(ref='refs/heads/' + TAG, object=dict(type='commit', sha=REVISION)),
+    dict(ref='refs/tags/' + TAG, object=dict(type='commit', sha='2' * 40)),
+])
+def test_ref_identity_must_be_the_exact_lightweight_tag(publication_state, identity):
+    publication_state['ref'] = identity
+    with pytest.raises(ValueError, match='exact experimental source commit'):
+        release.require_tag(TAG, REVISION)
+    assert publication_state['calls'] == []
+
+
+def test_new_release_uses_preverified_tag_and_rechecks_after_creation(tmp_path, publication_state):
+    state = publication_state
+    state['ref'] = state['make_ref']()
+    release.ensure_sources(TAG, REVISION, [], tmp_path)
+    commands = [event for event in state['events'] if event[0] == 'command']
+    assert len(commands) == 1 and commands[0][1][:3] == ('gh', 'release', 'create')
+    create_index = state['events'].index(commands[0])
+    assert ('get', 'git/ref/tags/' + TAG) in state['events'][:create_index]
+    assert ('get', 'git/ref/tags/' + TAG) in state['events'][create_index + 1:]
+    assert state['events'][-1] == ('get', 'releases/tags/' + TAG)
+
+
+def test_post_create_wrong_sha_stops_before_asset_upload(tmp_path, publication_state):
+    state = publication_state
+    state['ref'] = state['make_ref']()
+    state['change_after_release'] = True
+    asset = tmp_path / 'public.part00'
+    asset.write_bytes(b'public test source')
+    with pytest.raises(ValueError, match='exact experimental source commit'):
+        release.ensure_sources(TAG, REVISION, [asset], tmp_path)
+    assert [call[0][:3] for call in state['calls']] == [('gh', 'release', 'create')]
+
+
+@pytest.mark.parametrize('changed', [dict(tag_name='wrong-tag'), dict(draft=True), dict(prerelease=False)])
+def test_release_metadata_is_authoritative_not_target_label(publication_state, changed):
+    state = publication_state
+    state['ref'] = state['make_ref']()
+    state['release'] = dict(tag_name=TAG, draft=False, prerelease=True,
+                            target_commitish=REVISION)
+    state['release'].update(changed)
+    with pytest.raises(ValueError, match='public experimental tag'):
+        release.require_release(TAG, REVISION)
+    assert state['calls'] == []
+
+
+@pytest.mark.parametrize('drift_arch', ['amd64', 'aarch64'])
+def test_changed_ref_before_either_architecture_stops_its_image_push(
+        tmp_path, monkeypatch, publication_state, drift_arch):
+    state = publication_state
+    state['ref'] = state['make_ref']()
+    state['release'] = dict(tag_name=TAG, draft=False, prerelease=True, assets=[])
+    for arch in release.ARCHITECTURES:
+        summary = tmp_path / ('source-summary-' + arch) / 'source-parts'
+        summary.mkdir(parents=True)
+        (summary / f'eufy-nvr-sources-{arch}.json').write_text(json.dumps(dict(
+            architecture=arch, source_revision=REVISION, parts=[])))
+        image = tmp_path / ('candidate-image-' + arch)
+        image.mkdir()
+        archive = image / 'image.tar.gz'
+        archive.write_bytes(b'synthetic archive; never executed')
+        (image / f'image-{arch}.json').write_text(json.dumps(dict(
+            architecture=arch, source_revision=REVISION, version=VERSION,
+            file=archive.name, size=archive.stat().st_size, sha256=release.sha256(archive))))
+    config_digest = 'sha256:' + 'c' * 64
+    published = set()
+    original_command = release.run
+    def command(*args, **kwargs):
+        if args[:3] == ('gh', 'run', 'download') or args[:3] == ('gh', 'release', 'upload'):
+            return ''
+        if args[0] == 'docker':
+            state['calls'].append((args, kwargs))
+            if args[1] == 'load' and 'linux/' + release.ARCHITECTURES[drift_arch] in args:
+                state['ref'] = state['make_ref']('2' * 40)
+            if args[1] == 'push':
+                published.add(args[-1])
+            return ''
+        return original_command(*args, **kwargs)
+    monkeypatch.setattr(release, 'run', command)
+    monkeypatch.setattr(release, 'source_parts', lambda *args: [])
+    monkeypatch.setattr(release, 'login', lambda: None)
+    monkeypatch.setattr(release, 'archive_config_digest', lambda *args: config_digest)
+    monkeypatch.setattr(release, 'loaded_image_identity', lambda *args: 'sha256:' + 'd' * 64)
+    monkeypatch.setattr(release, 'image_manifest', lambda reference:
+        dict(config=dict(digest=config_digest), digest='sha256:' + 'e' * 64)
+        if reference in published else None)
+    with pytest.raises(ValueError, match='exact experimental source commit'):
+        release.stage('123', VERSION, REVISION, tmp_path)
+    assert len(published) == (0 if drift_arch == 'amd64' else 1)
+    assert release.IMAGE + ':' + VERSION + '-' + drift_arch not in published

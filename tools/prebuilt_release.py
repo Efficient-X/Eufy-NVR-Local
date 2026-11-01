@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -220,18 +221,59 @@ def retain_assets(tag, assets, workspace):
             raise ValueError('Published source asset differs; refusing replacement')
 
 
+def require_tag(tag, revision):
+    ref = api('git/ref/tags/' + tag)
+    identity = ref.get('object', {})
+    # This publisher creates lightweight tags only. Never move an existing tag
+    # or infer identity from a release's target_commitish or a branch label.
+    if (ref.get('ref') != 'refs/tags/' + tag
+            or identity.get('type') != 'commit' or identity.get('sha') != revision):
+        raise ValueError('Tag is not this exact experimental source commit')
+
+
+def require_release(tag, revision):
+    require_tag(tag, revision)
+    existing = api('releases/tags/' + tag)
+    if (existing.get('tag_name') != tag or existing.get('draft') is not False
+            or existing.get('prerelease') is not True):
+        raise ValueError('Release is not this exact public experimental tag')
+
+
+def prepare_tag(version, revision):
+    release_inputs(version, revision)
+    # Check both package versions at the audited commit without downloading or
+    # running an image. The tag must not claim another package version.
+    def source(path):
+        document = api('contents/' + path + '?ref=' + revision)
+        if document.get('encoding') != 'base64':
+            raise ValueError('Audited package version could not be verified')
+        return base64.b64decode(document['content']).decode('utf-8')
+    component = json.loads(source('custom_components/eufy_nvr/manifest.json'))
+    app = source('eufy_nvr/config.yaml')
+    if (component.get('version') != version
+            or re.findall(r'^version: ([^\r\n]+)$', app, re.MULTILINE) != [version]):
+        raise ValueError('Audited package versions differ from the requested tag')
+    tag = 'v' + version
+    if optional_api('git/ref/tags/' + tag) is None:
+        run('gh', 'api', '--method', 'POST', f'repos/{REPOSITORY}/git/refs',
+            '--input', '-', data=json.dumps(dict(ref='refs/tags/' + tag, sha=revision)))
+    # Read authoritative state even after successful POST; never trust only its
+    # response, retry creation after uncertainty, or force/update a public ref.
+    require_tag(tag, revision)
+    print('Verified tag ' + tag + ' at ' + revision + '. No release or images published.')
+
+
 def ensure_sources(tag, revision, assets, workspace):
+    require_tag(tag, revision)
     existing = optional_api('releases/tags/' + tag)
     if existing is None:
-        run('gh', 'release', 'create', tag, '--repo', REPOSITORY, '--target', revision,
+        run('gh', 'release', 'create', tag, '--repo', REPOSITORY, '--verify-tag',
             '--prerelease', '--title', 'Eufy NVR Local ' + tag[1:],
             '--notes', 'Experimental prebuilt image publication is in progress. The app-store default is unchanged. Real-camera acceptance is pending. Matching sources and original notices are retained with this release.',
             *map(str, assets))
-        return
-    ref = api('git/ref/tags/' + tag)['object']
-    if ref['type'] != 'commit' or ref['sha'] != revision or existing['draft'] or not existing['prerelease']:
-        raise ValueError('Existing release is not this exact experimental source commit')
+    require_release(tag, revision)
     retain_assets(tag, assets, workspace)
+    require_release(tag, revision)
 
 
 def loaded_image_identity(config_digest, arch, revision, version, workspace):
@@ -299,6 +341,7 @@ def stage(run_id, version, revision, workspace):
             run('docker', 'tag', loaded_identity, reference)
             # A saved OCI index can also contain build attestations. Publish
             # only its tested runtime platform; keep its exact config/layers.
+            require_release(tag, revision)
             run('docker', 'push', '--platform', 'linux/' + ARCHITECTURES[arch], reference)
             remote = image_manifest(reference)
         if (remote is None or remote.get('config', {}).get('digest') != config_digest
@@ -355,7 +398,7 @@ def promote(run_id, version, revision, workspace):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('record', 'stage', 'promote'))
+    parser.add_argument('operation', choices=('record', 'prepare', 'stage', 'promote'))
     parser.add_argument('--version', required=True)
     parser.add_argument('--revision')
     parser.add_argument('--architecture', choices=tuple(ARCHITECTURES))
@@ -370,6 +413,9 @@ def main():
         return
     revision = audit_revision(args.audit_run)
     release_inputs(args.version, revision)
+    if args.operation == 'prepare':
+        prepare_tag(args.version, revision)
+        return
     with tempfile.TemporaryDirectory(prefix='efx-public-release-') as folder:
         workspace = Path(folder)
         if args.operation == 'stage':
