@@ -1,3 +1,16 @@
+# 0.8.0-alpha.4 — unpublished local candidate
+
+- Reopen completed local setup with a new local session; retain saved Eufy access.
+- Preserve expiry for active sign-in, picture challenges and email-code steps.
+- Distinguish an occupied video port from rejected account access.
+- Treat plain-text HA ingress 401 as local expiry before parsing JSON.
+- Report remaining session life and a fresh-response check for planned migration.
+- Skip the picker for one installed app; preserve selection after an error.
+- No automatic old-app stop, password replacement, new permissions or migration.
+
+This source is not published, installed or hardware accepted. Normal one-page
+configuration and a verified camera viewer remain separate product work.
+
 # Changelog
 
 ## 0.8.0-alpha.2 (experimental packaging candidate)
