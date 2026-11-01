@@ -366,8 +366,8 @@ def test_release_metadata_is_authoritative_not_target_label(publication_state, c
     assert state['calls'] == []
 
 
-@pytest.mark.parametrize('drift_arch', ['amd64', 'aarch64'])
-def test_changed_ref_before_either_architecture_stops_its_image_push(
+@pytest.mark.parametrize('drift_arch', [None, 'amd64', 'aarch64'])
+def test_store_scoped_ids_are_not_tag_sources_and_ref_drift_stops_the_affected_push(
         tmp_path, monkeypatch, publication_state, drift_arch):
     state = publication_state
     state['ref'] = state['make_ref']()
@@ -392,7 +392,12 @@ def test_changed_ref_before_either_architecture_stops_its_image_push(
             return ''
         if args[0] == 'docker':
             state['calls'].append((args, kwargs))
-            if args[1] == 'load' and 'linux/' + release.ARCHITECTURES[drift_arch] in args:
+            if args[1] == 'tag':
+                # Docker 29 can inspect/export a platform by the local name
+                # while its platform-scoped ID is not a globally taggable ID.
+                assert args[2] == 'eufy-source-audit:latest'
+            if (args[1] == 'load' and drift_arch is not None
+                    and 'linux/' + release.ARCHITECTURES[drift_arch] in args):
                 state['ref'] = state['make_ref']('2' * 40)
             if args[1] == 'push':
                 published.add(args[-1])
@@ -406,7 +411,14 @@ def test_changed_ref_before_either_architecture_stops_its_image_push(
     monkeypatch.setattr(release, 'image_manifest', lambda reference:
         dict(config=dict(digest=config_digest), digest='sha256:' + 'e' * 64)
         if reference in published else None)
-    with pytest.raises(ValueError, match='exact experimental source commit'):
+    if drift_arch is None:
         release.stage('123', VERSION, REVISION, tmp_path)
-    assert len(published) == (0 if drift_arch == 'amd64' else 1)
-    assert release.IMAGE + ':' + VERSION + '-' + drift_arch not in published
+        report = json.loads((tmp_path / 'prebuilt-images.json').read_text())
+        assert {entry['architecture'] for entry in report['images']} == {'amd64', 'aarch64'}
+        assert all(entry['config_digest'] == config_digest for entry in report['images'])
+        assert len(published) == 2
+    else:
+        with pytest.raises(ValueError, match='exact experimental source commit'):
+            release.stage('123', VERSION, REVISION, tmp_path)
+        assert len(published) == (0 if drift_arch == 'amd64' else 1)
+        assert release.IMAGE + ':' + VERSION + '-' + drift_arch not in published
