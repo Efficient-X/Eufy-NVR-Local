@@ -426,3 +426,94 @@ async def test_http_save_drives_startup_and_running_service_blocks_overwrite(tmp
         assert (tmp_path / "auth").read_bytes() == previous
     assert not worker.running()
 
+
+
+@pytest.mark.asyncio
+async def test_occupied_video_port_is_distinct_from_bad_account_and_does_not_loop(tmp_path):
+    worker = Worker()
+    async def occupied():
+        worker.starts += 1
+        raise startup.VideoPortInUseError()
+    worker.start = occupied
+    checker = AsyncMock(return_value="valid")
+    controller = startup.StartupController(tmp_path / "auth", worker, checker=checker)
+    await controller.reconcile()
+    assert controller.state == "video_port_in_use"
+    assert controller.public_status()["can_retry"]
+    assert not controller.can_setup()
+    checker.assert_awaited_once()
+    await controller.tick()
+    await controller.tick()
+    assert worker.starts == 1
+    assert checker.await_count == 1
+    assert set(controller.public_status()) <= {"state", "warning", "can_setup", "can_retry"}
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_busy_port_never_spawns_a_video_process(monkeypatch):
+    worker = guided_launcher.MediaWorker()
+    monkeypatch.setattr(worker, "port_open", AsyncMock(return_value=True))
+    spawn = AsyncMock()
+    monkeypatch.setattr(guided_launcher.asyncio, "create_subprocess_exec", spawn)
+    with pytest.raises(startup.VideoPortInUseError):
+        await worker.start()
+    spawn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reopened_local_session_reports_actual_remaining_life(tmp_path, monkeypatch):
+    monkeypatch.setattr(setup_web, "_peer_ip", lambda request: "172.30.32.2")
+    app = setup_web.create_app(auth_path=tmp_path / "auth", budget_path=tmp_path / "budget",
+        allowed_users={"admin1"}, allowed_origins={"http://homeassistant.local"})
+    clock = [1000.0]
+    manager = app[setup_web.MANAGER]
+    manager.clock = lambda: clock[0]
+    async with TestClient(TestServer(app)) as http:
+        first = await (await http.post("/api/session", json={}, headers=HEADERS)).json()
+        assert first["expires_in_seconds"] == 600
+        deadline = manager.sessions["admin1"]["deadline"]
+        clock[0] += 270
+        second = await (await http.post("/api/session", json={}, headers=HEADERS)).json()
+        assert second["expires_in_seconds"] == 330
+        assert first["session"] == second["session"]
+        assert manager.sessions["admin1"]["deadline"] == deadline
+
+
+@pytest.mark.asyncio
+async def test_reopen_completed_setup_refreshes_only_local_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(setup_web, "_peer_ip", lambda request: "172.30.32.2")
+    login = AsyncMock()
+    monkeypatch.setattr(account_setup.ec, "login", login)
+    auth = tmp_path / "auth"
+    auth.write_text("synthetic unchanged saved account")
+    before = auth.read_bytes()
+    app = setup_web.create_app(auth_path=auth, budget_path=tmp_path / "budget",
+        allowed_users={"admin1"}, allowed_origins={"http://homeassistant.local"})
+    clock = [1000.0]
+    manager = app[setup_web.MANAGER]
+    manager.clock = lambda: clock[0]
+    async with TestClient(TestServer(app)) as http:
+        first = await (await http.post("/api/session", json={}, headers=HEADERS)).json()
+        wizard = manager.sessions["admin1"]["wizard"]
+        wizard.state = "complete"
+        clock[0] += 270
+        second = await (await http.post("/api/session", json={}, headers=HEADERS)).json()
+        assert second["session"] != first["session"]
+        assert second["expires_in_seconds"] == 600
+        assert wizard.state == "cancelled"
+        assert auth.read_bytes() == before
+        login.assert_not_awaited()
+
+
+@pytest.mark.parametrize("phase", ["connecting", "captcha", "email_code", "select_nvr"])
+def test_reopen_does_not_reset_in_progress_signin_lifetime(tmp_path, phase):
+    clock = [1000.0]
+    manager = setup_web.SetupSessions(tmp_path / "auth", None, clock=lambda:clock[0])
+    first = manager.open("owner")
+    first["wizard"].state = phase
+    clock[0] += 270
+    second = manager.open("owner")
+    assert first is second
+    assert second["deadline"] == 1600
+    assert second["wizard"].state == phase

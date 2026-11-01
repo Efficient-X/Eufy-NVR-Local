@@ -30,6 +30,7 @@ export function explainRuntime(runtime) {
     starting_video: "Starting the camera service. This may take up to two minutes.",
     video_service_running: "The camera service is running. Open a camera tile to check that the picture is live.",
     connection_unavailable: "We cannot check the saved sign-in right now. Your details are kept. Check the internet connection; the app will retry later without guessing your password.",
+    video_port_in_use: "Your account check passed, but another camera app is using the video port. Your saved connection is kept. A planned switch from the old app is needed; do not re-enter your Eufy password or stop apps at random.",
     service_error: "The camera service could not start or stopped. It will not keep restarting in a loop. Check the app log, then try the connection again.",
     stopped: "The camera service has stopped.",
   })[runtime.state] || "Checking the camera service.";
@@ -56,9 +57,20 @@ export function explainStatus(status) {
   })[status.state] || "Check progress to see which step comes next.";
 }
 
+export function switchReadiness({hasSession, secondsLeft, replyAge, state}) {
+  if (!hasSession || !Number.isFinite(secondsLeft) || secondsLeft < 360)
+    return "Before switching apps, reopen this app from Home Assistant after the backup. The local session needs at least six minutes left. Keep the old app running.";
+  if (!Number.isFinite(replyAge) || replyAge < 0 || replyAge > 30)
+    return "Check progress after the backup to confirm this local page still responds. Keep the old app running until that check succeeds.";
+  if (state !== "video_port_in_use")
+    return "The expected waiting-for-old-app state is not confirmed. Keep the old app running and check the status.";
+  return "Local setup check passed for a separately approved switch. Your old app has not been stopped. This does not prove that video works.";
+}
+
 export function mountSetup(doc, request = globalThis.fetch.bind(globalThis)) {
   const $ = id => doc.getElementById(id);
   let session = null, busy = false, expiryTimer, retryTimer, sequence = 0;
+  let sessionDeadline = null, lastReply = null;
   function clearSensitive() {
     for (const id of ["password", "answer", "code"]) $(id).value = "";
     $("remember").checked = false;
@@ -71,6 +83,11 @@ export function mountSetup(doc, request = globalThis.fetch.bind(globalThis)) {
     $("service").hidden = !runtime;
     $("service-status").textContent = runtime ? explainRuntime(runtime) : "";
     $("retry-service").hidden = !runtime?.can_retry;
+    $("switch-preflight").hidden = runtime?.state !== "video_port_in_use";
+    $("switch-preflight").textContent = switchReadiness({hasSession: !!session,
+      secondsLeft: sessionDeadline === null ? NaN : (sessionDeadline - Date.now()) / 1000,
+      replyAge: lastReply === null ? NaN : (Date.now() - lastReply) / 1000,
+      state: runtime?.state});
     $("forget-sign-in").hidden = !runtime?.remembered;
     $("remembered-status").hidden = !runtime?.remembered;
     $("remembered-status").textContent = runtime?.remembered
@@ -115,10 +132,13 @@ export function mountSetup(doc, request = globalThis.fetch.bind(globalThis)) {
   async function send(operation, data = {}) {
     if (busy && operation !== "cancel") return;
     const ticket = ++sequence;
+    const requestStarted = Date.now();
     busy = true;
     for (const button of doc.querySelectorAll("[data-action]")) button.disabled = true;
     $("error").hidden = true;
-    if (!["status", "cancel"].includes(operation)) $("status").textContent = "Checking with Eufy. Please wait…";
+    if (operation === "session") $("status").textContent = "Opening the protected Home Assistant setup session…";
+    else if (operation === "retry") $("status").textContent = "Checking the saved connection and camera service…";
+    else if (["start", "captcha", "verify", "select"].includes(operation)) $("status").textContent = "Checking with Eufy. Please wait…";
     try {
       const response = await request("api/" + operation, {
         method: operation === "status" ? "GET" : "POST",
@@ -129,33 +149,49 @@ export function mountSetup(doc, request = globalThis.fetch.bind(globalThis)) {
         ...(operation === "status" ? {} : { body: JSON.stringify(data) }),
         signal: AbortSignal.timeout(60000),
       });
+      if (ticket !== sequence) return;
+      // HA ingress can return plain-text 401 before this app receives a request.
+      // Handle it before JSON parsing; a local expiry is not a bad Eufy password.
+      if (response.status === 401) {
+        session = null; sessionDeadline = null; lastReply = null;
+        clearTimeout(expiryTimer);
+        clearTimeout(retryTimer);
+        render({ state: "expired", error: "session_expired" });
+        $("error").textContent = "This local Home Assistant setup session has closed. Reopen the app using Home Assistant's Open Web UI. Your saved Eufy connection is kept; do not change your Eufy password for this error.";
+        $("reopen").hidden = true; // A private ingress URL cannot renew its own access.
+        return;
+      }
       const result = await response.json();
       if (ticket !== sequence) return;
       if (!response.ok) {
-        if (response.status === 401) {
-          session = null;
-          render({ state: "expired", error: "session_expired" });
-        } else {
-          $("error").textContent = MESSAGES[result.error] || MESSAGES.setup_unavailable;
-          $("error").hidden = false;
-          $("check").hidden = !session;
-        }
+        $("error").textContent = MESSAGES[result.error] || MESSAGES.setup_unavailable;
+        $("error").hidden = false;
+        $("check").hidden = !session;
         return;
       }
+      lastReply = Date.now();
       if (operation === "session") {
         session = result;
+        const ttl = result.expires_in_seconds;
+        sessionDeadline = Number.isInteger(ttl) && ttl >= 0 && ttl <= 600
+          ? requestStarted + ttl * 1000 : null;
         clearTimeout(expiryTimer);
         expiryTimer = setTimeout(() => {
-          clearSensitive(); session = null; render({ state: "expired" });
-        }, 600000);
+          clearSensitive(); session = null; sessionDeadline = null; lastReply = null;
+          render({ state: "expired" });
+        }, sessionDeadline === null ? 600000 : Math.max(0, sessionDeadline - Date.now()));
         render(result.status);
       } else render(result);
     } catch {
       if (ticket !== sequence) return;
-      $("error").textContent = "The reply did not arrive. Do not sign in again yet: use Check progress to see whether the first request worked.";
+      $("error").textContent = operation === "session"
+        ? "The local Home Assistant setup session could not be opened. Reopen the app using Home Assistant's Open Web UI. Do not repeat Eufy sign-in; an already saved connection is kept."
+        : "The reply did not arrive. Do not sign in again yet: use Check progress to see whether the first request worked.";
+      lastReply = null;
+      $("switch-preflight").textContent = "The local setup page is not confirmed ready. Keep the old app running and reopen this page from Home Assistant.";
       $("error").hidden = false;
       $("check").hidden = !session;
-      $("reopen").hidden = !!session;
+      $("reopen").hidden = operation === "session" || !!session;
     } finally {
       if (ticket === sequence) {
         clearSensitive();

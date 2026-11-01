@@ -79,6 +79,10 @@ async def check_saved_account(path):
         return "unavailable"
 
 
+class VideoPortInUseError(RuntimeError):
+    """Fixed local startup classification, with no private reply content."""
+
+
 class StartupController:
     """One coordinator owns the child process and all cache-check scheduling."""
 
@@ -107,7 +111,7 @@ class StartupController:
                 **(self.renewal.public_status() if self.renewal else {}),
                 "can_setup": self.can_setup(),
                 "can_retry": not self._closed and not self._lock.locked()
-                    and self.state in {"connection_unavailable", "service_error"}}
+                    and self.state in {"connection_unavailable", "service_error", "video_port_in_use"}}
 
     async def reconcile(self):
         if self._closed or self._lock.locked():
@@ -172,6 +176,10 @@ class StartupController:
                     except asyncio.CancelledError:
                         await self.worker.stop()
                         raise
+                    except VideoPortInUseError:
+                        await self.worker.stop()
+                        self.state = "video_port_in_use"
+                        return
                     except Exception:
                         await self.worker.stop()
                         self.state = "service_error"
