@@ -335,10 +335,12 @@ def stage(run_id, version, revision, workspace):
         reference = IMAGE + ':' + version + '-' + arch
         config_digest = archive_config_digest(archive, arch, revision, version)
         run('docker', 'load', '--platform', 'linux/' + ARCHITECTURES[arch], '--input', str(archive))
-        loaded_identity = loaded_image_identity(config_digest, arch, revision, version, workspace)
+        loaded_image_identity(config_digest, arch, revision, version, workspace)
         remote = image_manifest(reference)
         if remote is None:
-            run('docker', 'tag', loaded_identity, reference)
+            # Tag the local name whose exported config was just verified.
+            # Platform-scoped inspect IDs need not be globally taggable IDs.
+            run('docker', 'tag', 'eufy-source-audit:latest', reference)
             # A saved OCI index can also contain build attestations. Publish
             # only its tested runtime platform; keep its exact config/layers.
             require_release(tag, revision)
