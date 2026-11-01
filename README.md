@@ -49,13 +49,17 @@ route diagnostic before describing your connection as LAN-only or offline.
 ## Install the preview
 
 There are two parts: an **app** that brings in the video, and an **integration**
-that gives Home Assistant camera items. Install both from the same source version.
+that gives Home Assistant camera items. The current tested source pair is
+**integration 0.8.0-alpha.3 with app 0.8.0-alpha.2**. Alpha.3 repairs integration
+setup only; it does not replace or update the alpha.2 video engine.
 
 1. Open the Home Assistant app store. In its menu, choose **Repositories**, add
    `https://github.com/Efficient-X/Eufy-NVR-Local`, and install
    **Eufy NVR Local (experimental)**. Home Assistant downloads the versioned app
    image for your processor. Leave it stopped while any older NVR app is running:
-   the apps use the same video ports and must not run together.
+   the video workers use the same ports and must not run together. A new guided
+   app may run its setup screen while the old worker continues serving video;
+   its own video worker refuses to start while that port is occupied.
 2. In HACS, add the same URL as a **custom repository**, category **Integration**.
    Download **Eufy NVR Local**, then restart Home Assistant to load it.
 3. Start the new app. Open **Settings > Devices & services > Add integration >
@@ -69,6 +73,20 @@ that gives Home Assistant camera items. Install both from the same source versio
 6. Add the **Eufy NVR cameras** dashboard card and choose the recorder group.
    The integration loads the card and its layout; no manual JavaScript resource
    entry or crop coordinates are required.
+
+### Preparing a replacement app
+
+Alpha.3 fixes a setup error where an existing camera connection blocked creation
+of the separate new app's first local-video password. The old app, its password
+and the existing camera entry stay unchanged. Nonempty passwords are never
+replaced. A connection already assigned to the selected app still blocks setup.
+
+This prepares the new app; it does not migrate the old connection automatically.
+Do not delete an existing camera entry or repeatedly create duplicate entries.
+Before switching engines, preserve its ports and dashboard layout, stop the old
+video worker, then reconfigure the existing entry for the new app's credentials.
+Only one video worker may own the shared ports. Keep the old app and its data
+until the replacement has passed live-camera checks.
 
 The preview starts manually by default. Once it works, you can enable the app's
 **Start on boot** switch if you want it to return after a Home Assistant restart.
