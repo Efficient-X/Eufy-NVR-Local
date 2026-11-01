@@ -103,7 +103,7 @@ def flow_harness(app, entries=()):
 @pytest.mark.asyncio
 async def test_automatic_flow_creates_from_server_side_credentials(app):
     flow, ns = flow_harness(app)
-    assert (await flow.async_step_user())["menu_options"] == ["app", "manual"]
+    assert (await flow.async_step_user())["type"] == "create"
     form = await flow.async_step_app()
     assert list(map(str, form["data_schema"].schema)) == ["app"]
     result = await flow.async_step_app({"app": "test_eufy_nvr"})
@@ -358,3 +358,30 @@ async def test_flow_reports_same_app_block_without_uncertain_write_message(app):
     assert await flow.async_step_app_security({"confirm": True}) == {
         "type": "abort", "reason": "already_configured"}
     ns["_validate_go2rtc"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_failed_new_app_selection_is_not_reset_to_old_app(app):
+    flow, ns = flow_harness(app)
+    ns["installed_apps"].return_value = {"old_eufy_nvr": "Old", "new_eufy_nvr": "New"}
+    ns["installed_connection"].side_effect = RuntimeError("private failure")
+    result = await flow.async_step_app({"app": "new_eufy_nvr"})
+    assert result["errors"] == {"base": "app_not_ready"}
+    assert result["data_schema"]({}) == {"app": "new_eufy_nvr"}
+
+
+@pytest.mark.asyncio
+async def test_single_app_bypasses_picker_but_still_requires_secret_consent(app):
+    flow, ns = flow_harness(app)
+    ns["installed_connection"].side_effect = app.LocalVideoSetupRequired()
+    result = await flow.async_step_user()
+    assert result["step_id"] == "app_security"
+    ns["create_installed_local_video"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_multiple_apps_remain_a_deliberate_choice(app):
+    flow, ns = flow_harness(app)
+    ns["installed_apps"].return_value = {"old_eufy_nvr": "Old", "new_eufy_nvr": "New"}
+    assert (await flow.async_step_user())["menu_options"] == ["app", "manual"]
+    ns["installed_connection"].assert_not_awaited()
