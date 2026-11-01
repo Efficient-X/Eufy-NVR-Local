@@ -717,8 +717,8 @@
       "size": 23095
     },
     "tools/s6_guided_entrypoint_smoke.py": {
-      "sha256": "5e490f389dba77bf31bb06796741dbfe8ad773fd3d763f9f555485e87f33a979",
-      "size": 9196
+      "sha256": "99483a4a05037d3b3131d6721ec1b917df258888ed063b84c2e735196d55ea7b",
+      "size": 10692
     },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
