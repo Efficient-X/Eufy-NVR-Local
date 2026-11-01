@@ -149,7 +149,13 @@ class EufyNvrConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Offer automatic local app connection or a standalone bridge."""
+        """Use one installed app directly; leave unusual setups a deliberate choice."""
+        try:
+            apps = await installed_apps(self.hass)
+        except Exception:
+            apps = {}
+        if len(apps) == 1:
+            return await self.async_step_app({"app": next(iter(apps))})
         return self.async_show_menu(step_id="user", menu_options=["app", "manual"])
 
     async def async_step_app(self, user_input=None) -> ConfigFlowResult:
@@ -164,6 +170,7 @@ class EufyNvrConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id="app", data_schema=vol.Schema({}),
                                        errors={"base": "app_unavailable"})
         if user_input is not None and user_input.get("app") in apps:
+            self._selected_app_slug = user_input["app"]
             try:
                 data = await installed_connection(self.hass, user_input["app"])
                 host, _ = await _validate_go2rtc(self.hass, data[CONF_HOST],
@@ -191,8 +198,10 @@ class EufyNvrConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(f"{host}:{data[CONF_API_PORT]}")
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title="Eufy NVR", data=data)
+        selected = getattr(self, "_selected_app_slug", None)
+        field = vol.Required("app", default=selected) if selected in apps else vol.Required("app")
         return self.async_show_form(step_id="app",
-            data_schema=vol.Schema({vol.Required("app"): vol.In(apps)}), errors=errors)
+            data_schema=vol.Schema({field: vol.In(apps)}), errors=errors)
 
     async def async_step_app_security(self, user_input=None) -> ConfigFlowResult:
         """Ask before saving a new local password or restarting the new app."""

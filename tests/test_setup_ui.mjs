@@ -11,8 +11,8 @@ const context = vm.createContext({
   setTimeout(fn) { pendingTimers.set(++timerId, fn); return timerId; },
   clearTimeout(id) { pendingTimers.delete(id); },
 });
-vm.runInContext(source.replaceAll('export ', '') + '\nglobalThis.api={mountSetup,explainStatus,explainRuntime,MESSAGES};', context);
-const { mountSetup, explainStatus, explainRuntime, MESSAGES } = context.api;
+vm.runInContext(source.replaceAll('export ', '') + '\nglobalThis.api={mountSetup,explainStatus,explainRuntime,MESSAGES,switchReadiness};', context);
+const { mountSetup, explainStatus, explainRuntime, MESSAGES, switchReadiness } = context.api;
 assert.match(explainStatus({state: 'complete'}), /not been tested/);
 assert.match(explainStatus({state: 'rate_limited', retry_after_seconds: 61}), /2 minute/);
 assert.match(MESSAGES.storage_failed, /old connection was not replaced/);
@@ -127,7 +127,51 @@ assert.match(nodes.get('status').textContent, /cancelled/);
 responses.push(() => ({ok: false, status: 401, json: async () => ({error: 'session_expired'})}));
 await ui.send('status');
 assert.equal(nodes.get('credentials').hidden, true);
-assert.equal(nodes.get('reopen').hidden, false);
+assert.equal(nodes.get('reopen').hidden, true);
 assert.match(nodes.get('error').textContent, /closed/);
 console.log('Setup wording, safe rendering, session headers, cancellation and expiry checks passed.');
 
+
+// A plain-text ingress 401 is local expiry, not a JSON/network/Eufy failure.
+let parsedUnauthorizedBody = false;
+responses.push(() => ({ok: false, status: 401, json: async () => {
+  parsedUnauthorizedBody = true;
+  throw new SyntaxError('not JSON');
+}}));
+await ui.send('status');
+assert.equal(parsedUnauthorizedBody, false);
+assert.match(nodes.get('error').textContent, /local Home Assistant/);
+assert.match(nodes.get('error').textContent, /saved Eufy connection is kept/);
+assert.equal(nodes.get('credentials').hidden, true);
+assert.equal(nodes.get('reopen').hidden, true);
+
+// Opening a local session must not claim to be testing the account password.
+let releaseSession;
+responses.push(() => new Promise(resolve => {releaseSession = resolve;}));
+const localSession = ui.send('session');
+assert.match(nodes.get('status').textContent, /protected Home Assistant/);
+assert.ok(!nodes.get('status').textContent.includes('Checking with Eufy'));
+releaseSession({ok: true, status: 200, json: async () => ({session:'next', csrf:'next-csrf',
+  status:{state:'complete', runtime:{state:'video_port_in_use', can_setup:false, can_retry:true}}})});
+await localSession;
+assert.match(nodes.get('service-status').textContent, /another camera app/);
+assert.match(nodes.get('service-status').textContent, /account check passed/);
+assert.equal(nodes.get('credentials').hidden, true);
+assert.equal(nodes.get('retry-service').hidden, false);
+
+// An unreachable session endpoint cannot offer a misleading internal reopen loop.
+responses.push(() => {throw new Error('synthetic local transport failure');});
+await ui.send('session');
+assert.match(nodes.get('error').textContent, /local Home Assistant setup session/);
+assert.match(nodes.get('error').textContent, /already saved connection is kept/);
+assert.equal(nodes.get('reopen').hidden, true);
+console.log('Local session expiry, non-JSON ingress rejection and video-port state passed.');
+
+// Migration preflight is informational only and never authorizes/stops an app.
+assert.match(switchReadiness({hasSession:true,secondsLeft:590,replyAge:1,state:'video_port_in_use'}), /separately approved/);
+assert.match(switchReadiness({hasSession:true,secondsLeft:330,replyAge:1,state:'video_port_in_use'}), /Keep the old app running/);
+assert.match(switchReadiness({hasSession:true,secondsLeft:590,replyAge:45,state:'video_port_in_use'}), /Check progress after the backup/);
+assert.match(switchReadiness({hasSession:false,secondsLeft:590,replyAge:1,state:'video_port_in_use'}), /Keep the old app running/);
+assert.match(switchReadiness({hasSession:true,secondsLeft:NaN,replyAge:1,state:'video_port_in_use'}), /Keep the old app running/);
+assert.match(switchReadiness({hasSession:true,secondsLeft:590,replyAge:1,state:'sign_in_required'}), /not confirmed/);
+console.log('Post-backup session/reply/port-state preflight checks passed.');

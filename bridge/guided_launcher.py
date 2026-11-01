@@ -17,7 +17,7 @@ from aiohttp import ClientSession, ClientTimeout, web
 
 from ha_setup_trust import HomeAssistantTrust
 from setup_web import create_app
-from startup_controller import StartupController, read_guided_cache
+from startup_controller import StartupController, VideoPortInUseError, read_guided_cache
 from auth_login import _write_private_json
 from setup_budget import SetupBudget
 from remembered_login import RememberedLogin
@@ -111,7 +111,7 @@ class MediaWorker:
         if self.process is not None:
             await self.stop()  # Finish the old tree before replacing its ownership handles.
         if await self.port_open():
-            raise RuntimeError("The video service port is already in use")
+            raise VideoPortInUseError("The video service port is already in use")
         if sys.platform.startswith("linux"):
             from process_ownership import OwnedProcesses, require_support
             require_support()  # Refuse to launch a tree we cannot safely track.
