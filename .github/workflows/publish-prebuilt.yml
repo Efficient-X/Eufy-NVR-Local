@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Stage images first; promote only after the package is public
+        description: Prepare and verify the exact tag first; stage images separately; promote only after the package is public
         required: true
         type: choice
-        options: [stage, promote]
+        options: [prepare, stage, promote]
       audit_run:
         description: Successful manual source audit run with image archiving enabled
         required: true
