@@ -133,7 +133,10 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
                 "Actual guided discovery did not run with isolated environment")
         async with ClientSession(timeout=ClientTimeout(total=5)) as session:
             async with session.get("http://127.0.0.1:1985/api/streams") as response:
-                require(response.status in {401, 403}, "Video API accepted unauthenticated access")
+                # Production intentionally trusts same-container loopback. This
+                # offline container has no LAN client, so do not claim this is
+                # a LAN authentication test or change the generated policy.
+                require(response.status == 200, "Trusted loopback video API is unavailable")
             async with session.get("http://127.0.0.1:1985/api/streams",
                                    auth=BasicAuth("synthetic", FIXTURE_PASSWORD)) as response:
                 require(response.status == 200, "Authenticated video API is unavailable")
@@ -149,6 +152,8 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
         stopped_in = time.monotonic() - started
         require(not worker.running() and not await worker.port_open(), "Stop left a worker or video port")
         print("PASS: real worker cleanup completed in %.2f seconds" % stopped_in, flush=True)
+
+    await exercise_auth_middleware(state)
 
     # Normal legacy launches must still require explicit legacy account options,
     # even if a caller supplies a guided-looking environment variable.
@@ -168,6 +173,50 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
         require(process.returncode != 0 and b"Set 'email' and 'password'" in output,
                 "A normal legacy launch bypassed its credential gate")
     print("PASS: genuine legacy credential gate remains strict with and without the S6 wrapper", flush=True)
+
+
+async def exercise_auth_middleware(state):
+    """Exercise real auth on an isolated config copy; no LAN-path claim."""
+    from aiohttp import BasicAuth, ClientSession, ClientTimeout
+    generated = state / "go2rtc.yaml"
+    original = generated.read_bytes()
+    marker = b"  local_auth: false"
+    require(original.count(marker) == 1, "Generated loopback policy was not explicit")
+    test_config = state / "synthetic-auth-test.yaml"
+    test_config.write_bytes(original.replace(marker, b"  local_auth: true"))
+    process = await asyncio.create_subprocess_exec(
+        "/opt/eufy/bridge/bin/go2rtc", "-config", str(test_config),
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=1)) as session:
+            deadline = time.monotonic() + 8
+            while True:
+                require(process.returncode is None, "Synthetic auth server exited")
+                try:
+                    async with session.get("http://127.0.0.1:1985/api/streams") as response:
+                        require(response.status == 401, "Forced-loopback auth accepted no credentials")
+                        break
+                except (OSError, asyncio.TimeoutError):
+                    require(time.monotonic() < deadline, "Synthetic auth server did not start")
+                    await asyncio.sleep(0.05)
+            async with session.get("http://127.0.0.1:1985/api/streams",
+                    auth=BasicAuth("synthetic", "synthetic-wrong-password")) as response:
+                require(response.status == 401, "Auth middleware accepted wrong credentials")
+            async with session.get("http://127.0.0.1:1985/api/streams",
+                    auth=BasicAuth("synthetic", FIXTURE_PASSWORD)) as response:
+                require(response.status == 200, "Auth middleware rejected correct credentials")
+        require(generated.read_bytes() == original, "Auth test changed generated production config")
+        print("PASS: real auth middleware rejects missing/wrong credentials on forced-loopback test copy; LAN path untested", flush=True)
+    finally:
+        if process.returncode is None:
+            process.terminate()
+            try:
+                async with asyncio.timeout(5):
+                    await process.wait()
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+        test_config.unlink(missing_ok=True)
 
 
 def host(image, *, baseline=False):
