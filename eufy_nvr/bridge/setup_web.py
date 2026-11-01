@@ -85,7 +85,10 @@ class SetupSessions:
     def open(self, user):
         self.expire()
         previous = self.sessions.get(user)
-        if previous and previous["wizard"].state in {"cancelled", "expired"}:
+        # Reopen a completed setup with a fresh local nonce/deadline. Its saved
+        # account file and video worker stay untouched. Never renew an in-flight
+        # sign-in, picture check or email-code session this way.
+        if previous and previous["wizard"].state in {"cancelled", "expired", "complete"}:
             previous["wizard"].cancel()
             del self.sessions[user]
         if user not in self.sessions:
@@ -212,6 +215,8 @@ def create_app(*, auth_path, budget_path, allowed_users=(), allowed_origins=(),
         session = manager.open(request.headers["X-Remote-User-Id"])
         return web.json_response({
             "session": session["id"], "csrf": session["csrf"],
+            # Reopening can reuse an existing session. Never claim a fresh TTL.
+            "expires_in_seconds": max(0, int(session["deadline"] - manager.clock())),
             "status": snapshot(session),
         })
 
