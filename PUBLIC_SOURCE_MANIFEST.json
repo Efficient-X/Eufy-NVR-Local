@@ -37,8 +37,8 @@
       "size": 1086
     },
     "README.md": {
-      "sha256": "1b97535bf54e74cf19fc48edbb2156775338215f41a94b7ffd4434ec6490b6fd",
-      "size": 6402
+      "sha256": "9420d9332b246d2d77e05f1f59f8dc233c4f7035d03b7103aa964d70ac784310",
+      "size": 7510
     },
     "THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -189,16 +189,16 @@
       "size": 3687
     },
     "custom_components/eufy_nvr/app_connection.py": {
-      "sha256": "8f11217768e5984047ae9ed3ea133f8a6b59c40d7dfb966c3fc6399c952ceced",
-      "size": 6709
+      "sha256": "1255f66f0cc3d5d606e07780dce12a08b361aeed68d13ab35a2bac165171d66d",
+      "size": 6754
     },
     "custom_components/eufy_nvr/camera.py": {
       "sha256": "fb4c7b32e0111d2d9f7e165150ad14b7c0cac3a176648e135521f42649a985f2",
       "size": 5676
     },
     "custom_components/eufy_nvr/config_flow.py": {
-      "sha256": "18d4631ac7fc0901d46e8a07ba16ca1b483b507010f83c11300010921ddd00b9",
-      "size": 15229
+      "sha256": "27899c7f1e59c237e2a38e1d90951f724ee6accfed0cf92fbf29d5b8759f0d82",
+      "size": 15383
     },
     "custom_components/eufy_nvr/const.py": {
       "sha256": "c4f2df30107c154bde621799daf521288be01dcc6268d836cb56accd245ce9a5",
@@ -221,7 +221,7 @@
       "size": 13548
     },
     "custom_components/eufy_nvr/manifest.json": {
-      "sha256": "df16e906a15f4a52f8a9b33e1e91e6e9e81b84274fcc8084c97a64c430f1c187",
+      "sha256": "46a0623b3ad4240a8a895f0c0e0b2e5ddf703954652595dd9825ea2727dea491",
       "size": 474
     },
     "custom_components/eufy_nvr/snapshot.py": {
@@ -497,8 +497,8 @@
       "size": 2294
     },
     "tests/test_app_connection.py": {
-      "sha256": "07ac0b0bd115736160416a68f6321f4c2c324bd4e7d06374e51cae023904151d",
-      "size": 16024
+      "sha256": "3a0ec354d757931135865a7fe6f7ac3463b94867670755a93849e372ba1bfd04",
+      "size": 17712
     },
     "tests/test_auth_hardening.py": {
       "sha256": "781d3f0a6d435d5ebe2bb7aa021c49e143faa04ba5025f853f137789f9f4d09f",
@@ -613,24 +613,24 @@
       "size": 5522
     },
     "tests/test_protocol_release_hardening.py": {
-      "sha256": "c07ba1cb2f6d9cb8cb6586ca8432da9ed8be2463b0c130f373b1388227a79c23",
-      "size": 5107
+      "sha256": "dbcbaaf2b35e8850eb04e76dc18305080ac4943c8e673a509f5b93d15e95d7fd",
+      "size": 5145
     },
     "tests/test_ptcs_transport.mjs": {
       "sha256": "9e57241e1806a48c13ae25cebfbf7045e1789f3dc68f4f915ffb8462effaeb9c",
       "size": 4706
     },
     "tests/test_public_package.py": {
-      "sha256": "e94863efe3bd43c7f552f479479784035c4cfacfc2e525b86d8a4097307d9e84",
-      "size": 3236
+      "sha256": "2666aecc7da98cc306b8c4384f82fd4b45e99379ed11963c54450d9e84ffb385",
+      "size": 3303
     },
     "tests/test_regions.py": {
       "sha256": "872943214d13decc7a61921d43c3f8ea9b87ae27176e224323752bfaf50da8f4",
       "size": 1852
     },
     "tests/test_release_packaging.py": {
-      "sha256": "13baa06c2317922bb62000d537a96559c303d3231c5b7edc6ba41bdb593c84ac",
-      "size": 11264
+      "sha256": "5dbd8ef1b891e74c80535811c9a7d92951f7c663737dca495c5bde1b03336e0a",
+      "size": 11315
     },
     "tests/test_remembered_login.py": {
       "sha256": "298092a33465a691c0a42d6a409a9f6ee38e618e05599d48329b662a2a2ce872",
@@ -725,8 +725,8 @@
       "size": 10139
     },
     "tools/stage_public_repository.py": {
-      "sha256": "b2bb6793f2d7b682e614427e44a5d3a290b09f914e8f6f72b67e14a68b80d94c",
-      "size": 12501
+      "sha256": "54637529d7b51ce652f497a6c742b531b10087be84ee6f87b91bb614ac66cad6",
+      "size": 12618
     },
     "tools/verify_candidate.py": {
       "sha256": "d83b5609a20b610f7031433b7ce4ceff1573996df9fbed2003853ddd821fb28e",
@@ -734,5 +734,5 @@
     }
   },
   "format": 1,
-  "version": "0.8.0-alpha.2"
+  "version": "0.8.0-alpha.3"
 }
