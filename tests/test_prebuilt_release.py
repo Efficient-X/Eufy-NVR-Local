@@ -158,7 +158,8 @@ def test_docker_push_error_never_echoes_the_job_token(monkeypatch):
 
 
 @pytest.mark.parametrize('changed_config', [False, True])
-def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkeypatch, changed_config):
+@pytest.mark.parametrize('api_versions', ['1.49 1.49', '1.49 1.48', '1.48 1.49'])
+def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkeypatch, changed_config, api_versions):
     labels = {'org.opencontainers.image.revision': REVISION,
               'org.opencontainers.image.version': '1.0.0-alpha.1',
               'io.hass.arch': 'aarch64', 'io.hass.version': '1.0.0-alpha.1'}
@@ -169,12 +170,15 @@ def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkey
     imported_id = 'sha256:' + 'd' * 64
     assert imported_id != expected_digest
     def command(*args):
-        assert '--platform' in args and 'linux/arm64' in args
+        if args[:3] == ('docker', 'version', '--format'):
+            return api_versions
         assert args[-1] == 'eufy-source-audit:latest'
         if args[:3] == ('docker', 'image', 'inspect'):
+            assert ('--platform' in args) == (api_versions == '1.49 1.49')
             return json.dumps([dict(Id=imported_id, Os='linux', Architecture='arm64',
                                     Config=dict(Labels=labels))])
         assert args[:3] == ('docker', 'image', 'save')
+        assert '--platform' in args and 'linux/arm64' in args
         # An imported image can retain its public labels while its layer content
         # changes. A plain-tar export must match the original config hash too.
         if changed_config:
@@ -195,6 +199,20 @@ def test_loaded_store_id_may_change_but_runtime_config_must_not(tmp_path, monkey
     else:
         assert release.loaded_image_identity(expected_digest, 'aarch64', REVISION,
             '1.0.0-alpha.1', tmp_path) == imported_id
+
+
+@pytest.mark.parametrize('api_versions', ['1.47 1.47', 'unknown', '1.49 unknown'])
+def test_unverified_or_too_old_docker_api_cannot_skip_identity_checks(tmp_path, monkeypatch, api_versions):
+    calls = []
+    def command(*args):
+        calls.append(args)
+        assert args[:3] == ('docker', 'version', '--format')
+        return api_versions
+    monkeypatch.setattr(release, 'run', command)
+    with pytest.raises(ValueError, match='Docker API'):
+        release.loaded_image_identity('sha256:' + 'c' * 64, 'amd64', REVISION,
+                                      '1.0.0-alpha.1', tmp_path)
+    assert len(calls) == 1
 
 
 VERSION = '1.0.0-alpha.1'
