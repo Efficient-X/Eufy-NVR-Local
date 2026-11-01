@@ -282,7 +282,17 @@ def loaded_image_identity(config_digest, arch, revision, version, workspace):
     # retained the exact runtime config (including layer diff IDs and labels).
     reference = 'eufy-source-audit:latest'
     platform = 'linux/' + ARCHITECTURES[arch]
-    metadata = json.loads(run('docker', 'image', 'inspect', '--platform', platform, reference))[0]
+    versions = run('docker', 'version', '--format', '{{.Client.APIVersion}} {{.Server.APIVersion}}').split()
+    if len(versions) != 2 or any(not re.fullmatch(r'[0-9]+\.[0-9]+', value) for value in versions):
+        raise ValueError('Docker API versions could not be verified')
+    versions = [tuple(map(int, value.split('.'))) for value in versions]
+    if any(value < (1, 48) for value in versions):
+        raise ValueError('Docker API 1.48 or newer is required for platform export')
+    # Platform inspection arrived one API version after platform save/load.
+    # Older stores still need identical architecture/labels and exact exported
+    # runtime-config bytes; never infer correctness from the local name alone.
+    inspect_platform = ('--platform', platform) if all(value >= (1, 49) for value in versions) else ()
+    metadata = json.loads(run('docker', 'image', 'inspect', *inspect_platform, reference))[0]
     validate_image(metadata, arch, revision, version)
     identity = metadata.get('Id', '')
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', identity):
@@ -335,10 +345,12 @@ def stage(run_id, version, revision, workspace):
         reference = IMAGE + ':' + version + '-' + arch
         config_digest = archive_config_digest(archive, arch, revision, version)
         run('docker', 'load', '--platform', 'linux/' + ARCHITECTURES[arch], '--input', str(archive))
-        loaded_identity = loaded_image_identity(config_digest, arch, revision, version, workspace)
+        loaded_image_identity(config_digest, arch, revision, version, workspace)
         remote = image_manifest(reference)
         if remote is None:
-            run('docker', 'tag', loaded_identity, reference)
+            # Tag the local name whose exported config was just verified.
+            # Platform-scoped inspect IDs need not be globally taggable IDs.
+            run('docker', 'tag', 'eufy-source-audit:latest', reference)
             # A saved OCI index can also contain build attestations. Publish
             # only its tested runtime platform; keep its exact config/layers.
             require_release(tag, revision)
