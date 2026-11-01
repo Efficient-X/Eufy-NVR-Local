@@ -112,7 +112,7 @@ def test_release_versions_and_go2rtc_are_aligned():
     config = (ROOT / "eufy_nvr/config.yaml").read_text()
     dockerfile = (ROOT / "eufy_nvr/Dockerfile").read_text()
     addon_version = yaml.safe_load(config)["version"]
-    assert (manifest["version"], addon_version) == ("0.8.0-alpha.5", "0.8.0-alpha.5")
+    assert (manifest["version"], addon_version) == ("0.8.0-alpha.6", "0.8.0-alpha.6")
     from packaging.version import Version
     assert Version(addon_version) >= Version("0.7.0")
     assert 'ARG GO2RTC_VERSION="v1.9.14"' in dockerfile
