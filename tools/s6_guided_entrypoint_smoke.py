@@ -40,9 +40,13 @@ pathlib.Path("/tmp/efx-discovery-reached").write_text("protected variables absen
 '''
 
 
+class SmokeFailure(RuntimeError):
+    """A fixed, non-sensitive assertion message from this synthetic test."""
+
+
 def require(condition, message):
     if not condition:
-        raise RuntimeError(message)
+        raise SmokeFailure(message)
 
 
 async def inside(*, baseline=False):
@@ -63,6 +67,7 @@ async def inside(*, baseline=False):
         "rtsp_port": 8556, "signaling_mode": "call", "signaling_identity": "nvr_admin",
         "log_level": "warning", "video_copy": True, "shared_grid": True,
         "grid_lens": "both", "adaptive_warm_seconds": 0, "keep_warm": False,
+        "disabled_channels": "", "grid_columns": 0, "setup_mode": "guided",
     }
     (state / "options.json").write_text(json.dumps(options))
     auth_path = state / "auth.json"
@@ -118,7 +123,7 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
         require(auth_path.read_bytes() == original_cache, "Startup changed saved account data")
         marker = Path("/tmp/efx-discovery-reached")
         if baseline:
-            require(controller.state == "video_service_failed" and not marker.exists(),
+            require(controller.state == "service_error" and not marker.exists(),
                     "The original environment-marker failure was not reproduced")
             require(not await worker.port_open(), "Failed baseline left a video listener")
             print("PASS: baseline saved-account acceptance followed by legacy-gate failure", flush=True)
@@ -208,7 +213,8 @@ def main():
             require(bool(args.image), "An explicit tested image is required")
             host(args.image, baseline=args.expect_env_marker_failure)
     except Exception as error:
-        print("FAIL: real S6 guided-entrypoint check (%s)" % type(error).__name__, file=sys.stderr)
+        detail = str(error) if isinstance(error, SmokeFailure) else type(error).__name__
+        print("FAIL: real S6 guided-entrypoint check: " + detail, file=sys.stderr)
         return 1
     return 0
 
