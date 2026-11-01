@@ -75,7 +75,7 @@ async def process_group_check(module, folder, mode="stubborn", stop_event=None):
     spawned = []
 
     async def substitute(*args, **kwargs):
-        require(args == ("/run.sh",), "Unexpected worker command")
+        require(args == ("/run.sh", "--guided-worker"), "Unexpected worker command")
         require(kwargs.get("start_new_session") is True, "Worker must own its session")
         process = await original_spawn(sys.executable, "-u", "-c", CHILD,
             str(folder), str(port), mode, stdout=asyncio.subprocess.DEVNULL,
