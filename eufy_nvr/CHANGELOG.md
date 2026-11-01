@@ -1,4 +1,20 @@
-# 0.8.0-alpha.5 — corrective experimental candidate
+# 0.8.0-alpha.6 — guided worker startup candidate
+
+- Carry guided-worker mode as an explicit non-secret command argument, so S6's
+  environment restoration cannot send a saved-account startup into legacy login.
+- Keep the legacy credential gate strict when no guided argument is supplied.
+- Add a real S6/container regression with a synthetic saved account, discovery
+  transport, authenticated go2rtc and eight-view layout. Reproduce alpha.5's
+  failure using its immutable published image before testing the candidate.
+- Register the lifetime snapshot retry loop as entry-owned background work;
+  retain bounded initial seeding and automatic unload cancellation.
+- Correct stale setup/version wording. No passwords, permissions, recordings,
+  dashboard IDs or existing app data are changed by these fixes.
+
+This candidate still needs native and real-camera acceptance. Alpha.5's guided
+login passed on hardware, but its video worker failed; the old engine was restored.
+
+## 0.8.0-alpha.5 — corrective experimental publication
 
 - Supersede the withdrawn alpha.4 publication without moving its public tag.
 - Retain the reviewed setup and recovery implementation; rebuild and test
@@ -12,8 +28,8 @@
 - Skip the picker for one installed app; preserve selection after an error.
 - No automatic old-app stop, password replacement, new permissions or migration.
 
-This source is not published, installed or hardware accepted. Normal one-page
-configuration and a verified camera viewer remain separate product work.
+The alpha.5 image was published and installed experimentally. Its guided video
+worker failed before camera acceptance; publication is not a live-video pass.
 
 # Changelog
 
