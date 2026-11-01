@@ -1,3 +1,7 @@
+> **UNPUBLISHED LOCAL CANDIDATE — NOT INSTALLED.** Alpha.4 source below is for
+> review and isolated tests. No alpha.4 app image is published. Native image,
+> Home Assistant and hardware acceptance are still required before deployment.
+
 # Eufy NVR Local
 
 **By Efficient X (EFX)**
@@ -50,8 +54,11 @@ route diagnostic before describing your connection as LAN-only or offline.
 
 There are two parts: an **app** that brings in the video, and an **integration**
 that gives Home Assistant camera items. The current tested source pair is
-**integration 0.8.0-alpha.3 with app 0.8.0-alpha.2**. Alpha.3 repairs integration
-setup only; it does not replace or update the alpha.2 video engine.
+**integration 0.8.0-alpha.4 with app 0.8.0-alpha.4** in this local candidate.
+It improves app selection, local-session expiry, completed-session reopening,
+post-backup migration preflight and video-port conflict messages. This is not
+an installed or published release, and it does not yet implement the entire
+single-configuration installation design.
 
 1. Open the Home Assistant app store. In its menu, choose **Repositories**, add
    `https://github.com/Efficient-X/Eufy-NVR-Local`, and install
