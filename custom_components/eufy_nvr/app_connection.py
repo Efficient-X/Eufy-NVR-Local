@@ -22,6 +22,10 @@ class LocalVideoSetupError(Exception):
     """Fixed, non-sensitive failure; never expose Supervisor response text."""
 
 
+class LocalVideoAlreadyConfigured(LocalVideoSetupError):
+    """The selected app already belongs to an integration; nothing was written."""
+
+
 def needs_local_video_setup(info):
     return (bool(APP_SLUG.fullmatch(info.slug)) and str(info.state) == "started"
             and getattr(info, "ingress", False) is True
@@ -73,19 +77,18 @@ async def create_installed_local_video(hass, slug):
     """Only called by the explicit confirmation form, never by discovery."""
     from homeassistant.components.hassio import get_supervisor_client
     from aiohasupervisor.models.addons import AddonsOptions
-    from .const import DEFAULT_API_PORT, DEFAULT_HOST, DOMAIN
+    from .const import DOMAIN
     if not isinstance(slug, str) or not APP_SLUG.fullmatch(slug):
         raise LocalVideoSetupError("Invalid app selection")
     locks = hass.data.setdefault("eufy_nvr_local_video_setup_locks", {})
     async with locks.setdefault(slug, asyncio.Lock()):
-        # Do not initialize a new app over a connection HA already uses.
+        # App-private credentials are separate even when two host-network apps
+        # use the same future video endpoint. Preparing a fresh guided app does
+        # not change the existing entry or start its media worker. The worker
+        # refuses occupied ports; the connection flow still rejects duplicates.
         for entry in hass.config_entries.async_entries(DOMAIN):
             if entry.data.get("app_slug") == slug:
-                raise LocalVideoSetupError("This connection is already configured")
-            if (entry.data.get("api_port") == DEFAULT_API_PORT
-                    and isinstance(entry.data.get("host"), str)
-                    and await same_endpoint(DEFAULT_HOST, entry.data["host"], DEFAULT_API_PORT)):
-                raise LocalVideoSetupError("This connection is already configured")
+                raise LocalVideoAlreadyConfigured("This app is already configured")
         return await provision_local_video(get_supervisor_client(hass).addons, slug, AddonsOptions)
 
 

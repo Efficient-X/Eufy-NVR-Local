@@ -17,7 +17,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .app_connection import (
-    LocalVideoSetupRequired, create_installed_local_video,
+    LocalVideoAlreadyConfigured, LocalVideoSetupRequired, create_installed_local_video,
     installed_apps, installed_connection, same_endpoint,
 )
 
@@ -206,6 +206,8 @@ class EufyNvrConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 try:
                     await create_installed_local_video(self.hass, slug)
+                except LocalVideoAlreadyConfigured:
+                    return self.async_abort(reason="already_configured")
                 except Exception:
                     errors["base"] = "local_video_setup_uncertain"
                 else:

@@ -23,7 +23,7 @@ class ReleasePackagingTest(unittest.TestCase):
         for ref in action_refs:
             self.assertRegex(ref, r"^[0-9a-f]{40}$")
 
-    def test_integration_addon_versions_match_and_build_source_is_vendored(self):
+    def test_reviewed_component_pair_and_vendored_build_source(self):
         manifest_version = json.loads(
             (ROOT / "custom_components/eufy_nvr/manifest.json").read_text()
         )["version"]
@@ -32,7 +32,8 @@ class ReleasePackagingTest(unittest.TestCase):
         dockerfile = (ROOT / "eufy_nvr/Dockerfile").read_text()
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
-        self.assertEqual(addon_version, manifest_version)
+        self.assertEqual((addon_version, manifest_version),
+                         ("0.8.0-alpha.2", "0.8.0-alpha.3"))
         self.assertFalse((ROOT / "eufy_nvr/build.yaml").exists())
         self.assertRegex(
             dockerfile,

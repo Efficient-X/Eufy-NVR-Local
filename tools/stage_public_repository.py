@@ -13,7 +13,9 @@ import yaml
 import stage_guided_candidate as guided
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0-alpha.2"
+VERSION = "0.8.0-alpha.3"
+# Integration-only repair: keep the published app image and its source tag intact.
+APP_VERSION = "0.8.0-alpha.2"
 PUBLIC_IMAGE = "ghcr.io/efficient-x/eufy-nvr-local"
 MANIFEST = "PUBLIC_SOURCE_MANIFEST.json"
 SOURCE_FILES = (
@@ -229,7 +231,7 @@ def stage(destination, *, root=ROOT):
     config = guided.candidate_config(source_config)
     if image is not None:
         config["image"] = image
-    config.update(name="Eufy NVR Local (experimental)", version=VERSION,
+    config.update(name="Eufy NVR Local (experimental)", version=APP_VERSION,
                   url="https://github.com/Efficient-X/Eufy-NVR-Local")
     files["eufy_nvr/config.yaml"] = yaml.safe_dump(config,sort_keys=False).encode()
     component = json.loads(files["custom_components/eufy_nvr/manifest.json"])

@@ -84,7 +84,8 @@ def flow_harness(app, entries=()):
         "installed_connection": AsyncMock(return_value=app.connection_from_info(info())),
         "_validate_go2rtc": AsyncMock(return_value=("homeassistant.local", 9)),
         "same_endpoint": AsyncMock(return_value=False)}
-    namespace.update(LocalVideoSetupRequired=app.LocalVideoSetupRequired,
+    namespace.update(LocalVideoAlreadyConfigured=app.LocalVideoAlreadyConfigured,
+                     LocalVideoSetupRequired=app.LocalVideoSetupRequired,
                      create_installed_local_video=AsyncMock(return_value=True))
     exec(compile(ast.fix_missing_locations(ast.Module(body=[wrapper], type_ignores=[])), "flow", "exec"), namespace)
     flow = namespace["Flow"]()
@@ -283,18 +284,40 @@ def supervisor_environment(app, monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("entry", [
-    {"app_slug": "test_eufy_nvr"},
-    {"host": "homeassistant.local", "api_port": 1985},
-])
-async def test_existing_integration_blocks_first_time_write(app, supervisor_environment, entry):
+async def test_same_app_integration_blocks_first_time_write(app, supervisor_environment):
     hass, client = supervisor_environment
-    hass.config_entries.async_entries = lambda domain: [SimpleNamespace(data=entry)]
-    with pytest.raises(app.LocalVideoSetupError):
+    hass.config_entries.async_entries = lambda domain: [SimpleNamespace(
+        data={"app_slug": "test_eufy_nvr"})]
+    with pytest.raises(app.LocalVideoAlreadyConfigured):
         await app.create_installed_local_video(hass, "test_eufy_nvr")
     client.addon_info.assert_not_awaited()
     client.set_addon_options.assert_not_awaited()
     client.restart_addon.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("old_slug", ["old_eufy_nvr", None])
+async def test_other_app_endpoint_does_not_block_new_app_preparation(
+        app, supervisor_environment, old_slug):
+    hass, client = supervisor_environment
+    old_data = {"host": "homeassistant.local", "api_port": 1985,
+                "rtsp_port": 8558, "username": "old-user", "password": "old-password"}
+    if old_slug is not None:
+        old_data["app_slug"] = old_slug
+    previous = dict(old_data)
+    hass.config_entries.async_entries = lambda domain: [SimpleNamespace(data=old_data)]
+    current = fresh_info()
+    client.addon_info.side_effect = lambda slug: current
+    async def save(slug, body):
+        assert slug == current.slug
+        current.options = body.config
+    client.set_addon_options.side_effect = save
+    assert await app.create_installed_local_video(hass, current.slug)
+    assert old_data == previous
+    assert len(current.options["go2rtc_password"]) >= 40
+    assert all(call.args == (current.slug,) for call in client.addon_info.await_args_list)
+    client.set_addon_options.assert_awaited_once()
+    client.restart_addon.assert_awaited_once_with(current.slug)
 
 
 @pytest.mark.asyncio
@@ -324,3 +347,14 @@ async def test_unrecognised_app_cannot_trigger_supervisor_writes(app, supervisor
     client.addon_info.assert_not_awaited()
     client.set_addon_options.assert_not_awaited()
     client.restart_addon.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_flow_reports_same_app_block_without_uncertain_write_message(app):
+    flow, ns = flow_harness(app)
+    flow._local_setup_slug = "test_eufy_nvr"
+    ns["LocalVideoAlreadyConfigured"] = app.LocalVideoAlreadyConfigured
+    ns["create_installed_local_video"].side_effect = app.LocalVideoAlreadyConfigured()
+    assert await flow.async_step_app_security({"confirm": True}) == {
+        "type": "abort", "reason": "already_configured"}
+    ns["_validate_go2rtc"].assert_not_awaited()
