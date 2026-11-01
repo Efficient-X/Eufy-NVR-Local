@@ -84,6 +84,36 @@ jobs:
           docker stop --time 60 "$cid" >/dev/null
           test "$(docker inspect --format '{{.State.ExitCode}}' "$cid")" = 0
           docker logs "$cid" 2>&1 | grep '^PASS: container stop reached CMD'
+      - name: Verify imported platform tagging with real Docker
+        env:
+          AUDIT_ARCH: ${{ matrix.arch }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          import prebuilt_release as release
+          arch = os.environ['AUDIT_ARCH']
+          revision = os.environ['SOURCE_REVISION']
+          version = os.environ['APP_VERSION']
+          platform = 'linux/' + release.ARCHITECTURES[arch]
+          with tempfile.TemporaryDirectory(prefix='efx-import-smoke-') as folder:
+              root = Path(folder)
+              original = root / 'original.tar'
+              release.run('docker', 'image', 'save', '--output', str(original), 'eufy-source-audit:latest')
+              expected = release.archive_config_digest(original, arch, revision, version)
+              release.run('docker', 'load', '--platform', platform, '--input', str(original))
+              scoped_id = release.loaded_image_identity(expected, arch, revision, version, root)
+              legacy = subprocess.run(['docker', 'tag', scoped_id, 'efx-import-smoke:by-id'],
+                                      capture_output=True, text=True)
+              release.run('docker', 'tag', 'eufy-source-audit:latest', 'efx-import-smoke:verified')
+              tagged = root / 'tagged.tar'
+              release.run('docker', 'image', 'save', '--platform', platform,
+                          '--output', str(tagged), 'efx-import-smoke:verified')
+              assert release.archive_config_digest(tagged, arch, revision, version) == expected
+              print('Verified native saved-image tagging:', arch, expected,
+                    'platform-scoped-ID-taggable=' + str(legacy.returncode == 0))
+          PY
       - name: Record the original runtime packages before source collection
         run: |
           mkdir source-review
