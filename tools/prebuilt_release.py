@@ -282,7 +282,17 @@ def loaded_image_identity(config_digest, arch, revision, version, workspace):
     # retained the exact runtime config (including layer diff IDs and labels).
     reference = 'eufy-source-audit:latest'
     platform = 'linux/' + ARCHITECTURES[arch]
-    metadata = json.loads(run('docker', 'image', 'inspect', '--platform', platform, reference))[0]
+    versions = run('docker', 'version', '--format', '{{.Client.APIVersion}} {{.Server.APIVersion}}').split()
+    if len(versions) != 2 or any(not re.fullmatch(r'[0-9]+\.[0-9]+', value) for value in versions):
+        raise ValueError('Docker API versions could not be verified')
+    versions = [tuple(map(int, value.split('.'))) for value in versions]
+    if any(value < (1, 48) for value in versions):
+        raise ValueError('Docker API 1.48 or newer is required for platform export')
+    # Platform inspection arrived one API version after platform save/load.
+    # Older stores still need identical architecture/labels and exact exported
+    # runtime-config bytes; never infer correctness from the local name alone.
+    inspect_platform = ('--platform', platform) if all(value >= (1, 49) for value in versions) else ()
+    metadata = json.loads(run('docker', 'image', 'inspect', *inspect_platform, reference))[0]
     validate_image(metadata, arch, revision, version)
     identity = metadata.get('Id', '')
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', identity):
