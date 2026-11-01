@@ -137,7 +137,8 @@ recorder or erase recordings.
 In the new guided version, saving starts the camera service automatically.
 The screen then tells you whether that service started. Open a camera tile to
 check the actual picture: a running service alone is not proof of a live feed.
-This startup connection has local automated tests, but is not installed yet.
+Automated startup checks use synthetic state. Treat setup as complete only after
+you can open the correct live camera pictures; consult the release's acceptance status.
 
 ## What happens when the app starts?
 
@@ -230,8 +231,8 @@ or for Eufy to respond should not make Home Assistant restart the app: that
 would interrupt setup without fixing the problem. If video cannot start, the
 setup page explains the next step separately.
 
-This behaviour is implemented in the development test package, not installed
-on your working system. Developer testing instructions are in
+These control paths have automated checks; that is separate from real-camera
+acceptance. Developer testing instructions are in
 [Guided candidate testing](GUIDED_CANDIDATE.md).
 
 | Message | What it means | What to do |
