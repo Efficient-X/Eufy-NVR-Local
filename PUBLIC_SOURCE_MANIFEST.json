@@ -557,8 +557,8 @@
       "size": 7352
     },
     "tests/test_guided_packaging.py": {
-      "sha256": "1c1a759d08e5b70dd9517b03914444e183cd30a2df3bd18ae5c1c7a2b1ba81ae",
-      "size": 9790
+      "sha256": "2d5b99d8087741e3e2edf298efc83b3640f740065eea9fec07ff96eb7336f42c",
+      "size": 11915
     },
     "tests/test_guided_startup.py": {
       "sha256": "d522209f9b187097af5190cc34aa19e806ca86b58d4cecf3218efdcfb28ea021",
@@ -717,8 +717,8 @@
       "size": 23095
     },
     "tools/s6_guided_entrypoint_smoke.py": {
-      "sha256": "a50085bff28a75d949ef234f3aade481bdf6910c97a5fa1c92fe595ed0393e31",
-      "size": 10946
+      "sha256": "b761004a229b64af3f91c441b5ded4d7d79d0b8ba1d34f49248818eb92fa2673",
+      "size": 13690
     },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
