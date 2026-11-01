@@ -54,7 +54,7 @@ async def inside(*, baseline=False):
     sys.path.insert(0, str(root))
     import guided_launcher
     import startup_controller
-    from aiohttp import BasicAuth, ClientSession, ClientTimeout
+    from aiohttp import web
 
     state = Path("/data")
     state.mkdir(exist_ok=True)
@@ -71,6 +71,34 @@ async def inside(*, baseline=False):
     # This writable layer belongs only to this disposable offline test container.
     # No real image or source file on the host is changed.
     (root / "eufy_run.py").write_text(DISCOVERY)
+    # Bashio reads options through Supervisor even when options.json exists.
+    # Supply only that endpoint on loopback, never a household Supervisor.
+    requests = []
+
+    async def configured_options(request):
+        if request.headers.get("Authorization") != "Bearer synthetic-container-token":
+            return web.json_response({"result": "error"}, status=403)
+        requests.append(request.path)
+        return web.json_response({"result": "ok", "data": options})
+
+    supervisor = web.Application()
+    for route in ("/addons/self/options/config", "/apps/self/options/config"):
+        supervisor.router.add_get(route, configured_options)
+    runner = web.AppRunner(supervisor, access_log=None)
+    await runner.setup()
+    try:
+        await web.TCPSite(runner, "127.0.0.1", 80).start()
+        await exercise_worker(guided_launcher, startup_controller, auth_path,
+                              original_cache, baseline=baseline)
+        require(bool(requests), "Actual Bashio did not read the synthetic Supervisor options")
+    finally:
+        await runner.cleanup()
+
+
+async def exercise_worker(guided_launcher, startup_controller, auth_path,
+                          original_cache, *, baseline=False):
+    from aiohttp import BasicAuth, ClientSession, ClientTimeout
+    state = auth_path.parent
     accepted = []
 
     async def accepted_account(path):
@@ -140,6 +168,7 @@ async def inside(*, baseline=False):
 def host(image, *, baseline=False):
     name = "efx-guided-entry-smoke-" + uuid.uuid4().hex[:12]
     command = ["docker", "run", "--name", name, "--rm", "--network", "none",
+               "--add-host", "supervisor:127.0.0.1",
                "--pids-limit", "64", "--memory", "512m", "--cpus", "2",
                "--env", "SUPERVISOR_TOKEN=synthetic-container-token",
                "--env", "EUFY_PASSWORD=synthetic-container-password",
@@ -154,6 +183,9 @@ def host(image, *, baseline=False):
         require("synthetic-container-token" not in output and
                 "synthetic-container-password" not in output and FIXTURE_PASSWORD not in output,
                 "A synthetic protected value was logged")
+        if baseline:
+            require("Set 'email' and 'password'" in output,
+                    "Baseline did not reproduce the exact legacy credential gate")
         print(output, end="" if output.endswith("\n") else "\n")
         require(result.returncode == 0, "Actual container-entrypoint regression failed")
         require("PASS: baseline saved-account" in output if baseline else
