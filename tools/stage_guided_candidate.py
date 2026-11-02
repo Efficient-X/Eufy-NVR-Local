@@ -23,6 +23,7 @@ BRIDGE_FILES = (
     "setup_ui/index.html", "setup_ui/setup.css", "setup_ui/setup.js",
 )
 TOP_FILES = ("Dockerfile", "run.sh", "guided-entry.sh", ".dockerignore",
+             "README.md", "icon.png", "logo.png",
              "THIRD_PARTY.md", "licenses/go2rtc-LICENSE.txt",
              "licenses/eufy-sdk-APACHE-2.0.txt", "licenses/eufy-sdk-PROVENANCE.md",
              "licenses/EFX-MIT-LICENSE.txt")
@@ -34,6 +35,9 @@ COMPONENT_FILES = (
     "coordinator.py", "diagnostics.py", "go2rtc_api.py", "manifest.json",
     "snapshot.py", "strings.json", "translations/en.json", "frontend.py",
     "www/eufy-shared-tiles.js",
+    "brand/icon.png", "brand/icon@2x.png", "brand/logo.png", "brand/logo@2x.png",
+    "brand/dark_logo.png", "brand/dark_logo@2x.png",
+    "brand/LICENSE",
 )
 # Only video options are retained. Never copy account, challenge, import or refresh options.
 VIDEO_OPTIONS = {
