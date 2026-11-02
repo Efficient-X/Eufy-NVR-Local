@@ -41,9 +41,9 @@ jobs:
           node --check bridge/sctp_oracle.js
           node --check bridge/fetch_deps.js
           node --check bridge/get_auth.js
-          node --test tests/test_shared_tiles.mjs
-          node --test tests/test_setup_ui.mjs
-          node --test tests/test_ptcs_transport.mjs
+          node --test tests/*.mjs
+      - name: Exercise accepted HTTP timeouts with real synthetic child processes
+        run: python tools/process_http_recovery_smoke.py
 
   addon-build:
     needs: test
