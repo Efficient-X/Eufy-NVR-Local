@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Offline Eufy module registration test</title>
+<h1>Offline Eufy module registration test</h1>
+<p>Synthetic entities only. No Home Assistant or camera requests.</p>
+<pre id="result">Running</pre>
+<script type="module">
+const result = document.querySelector('#result');
+const checks = [];
+const check = (name, ok) => { checks.push({name, ok}); if (!ok) throw Error(name); };
+try {
+  const mode = new URL(location).searchParams.get('mode') || 'clean';
+  if (mode === 'legacy') customElements.define('eufy-shared-tiles', class extends HTMLElement {});
+  if (mode === 'polyfill-first') await import('/fixtures/scoped-registry.js');
+  const moduleURL = '../frontend/eufy-shared-tiles.js?' + (new URL(location).searchParams.get('revision') || 'first');
+  const module = await import(moduleURL);
+  if (mode === 'polyfill-late') {
+    check('native registry initially contains card', Boolean(customElements.get('eufy-nvr-cameras')));
+    const originalRegistry = customElements;
+    await import('/fixtures/scoped-registry.js');
+    check('actual HA-pinned polyfill replaces registry', customElements !== originalRegistry);
+    customElements.define('home-assistant', class extends HTMLElement {});
+    // HA/resource loaders re-importing the SAME URL get the cached ES module.
+    await import(moduleURL);
+    // Candidate may expose an explicit asynchronous readiness contract.
+    if (module.registrationReady) await module.registrationReady;
+    check('card visible after actual registry replacement', Boolean(customElements.get('eufy-nvr-cameras')));
+  }
+  if (!customElements.get('home-assistant')) customElements.define('home-assistant', class extends HTMLElement {});
+  if (module.registrationReady) check('readiness contract succeeds', await module.registrationReady);
+  for (const name of ['eufy-shared-tiles', 'eufy-nvr-cameras', 'eufy-nvr-cameras-editor']) {
+    check(name + ' defined', Boolean(customElements.get(name)));
+  }
+  const card = document.createElement('eufy-nvr-cameras');
+  check('card constructs', card instanceof module.EufyNvrCameras);
+  card.setConfig({type:'custom:eufy-nvr-cameras', entity:'camera.synthetic', layout:'auto'});
+  card.hass = {states:{}};
+  check('missing metadata renders waiting message', card.shadowRoot.textContent.includes('Waiting for the NVR'));
+  card.hass = {states:{'camera.synthetic':{state:'unavailable',attributes:{
+    stream_name:'eufy_shared_grid',eufy_grid_layout:{version:1,grid_columns:3,grid_rows:3,
+      tiles:Array.from({length:8},(_,index)=>({index,name:'Synthetic lens '+index}))}}}}};
+  check('eight tiles render', card.shadowRoot.querySelectorAll('canvas').length === 9);
+  const original = customElements.get('eufy-nvr-cameras');
+  await import('../frontend/eufy-shared-tiles.js?second');
+  check('second URL import preserves registered constructor', original === customElements.get('eufy-nvr-cameras'));
+  check('one picker entry', window.customCards.filter(c=>c.type==='eufy-nvr-cameras').length===1);
+  result.textContent = JSON.stringify({status:'PASS',mode,checks},null,2);
+} catch(error) {
+  result.textContent = JSON.stringify({status:'FAIL',checks,error:{name:error.name,message:error.message,stack:error.stack}},null,2);
+}
+</script>
