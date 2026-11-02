@@ -6,6 +6,48 @@ const require = createRequire(import.meta.url);
 const {packetize, Reassembler, MAX_FRAME_BYTES, MAX_PARTIALS, MAX_BUFFER_BYTES, STALE_MS} = require('../bridge/ptcs_transport.js');
 const {buildOpenLive, fixedControlStatus, link2channel, channel2link} = require('../bridge/sctp_oracle.js');
 
+test('observed NVR notification flag delivers a synthetic device-list reply', () => {
+  // Observed header facts only: v3, notification channel 2, 667-byte frame,
+  // 695-byte wire packet, flags 0x4e9b. No household payload or identifiers.
+  const payload = Buffer.from(JSON.stringify({cmd:9100, payload:{dev_list:
+    Array.from({length:4}, (_,ch)=>({ch,name:`Synthetic ${ch}`,sn:`TEST${ch}`,status:1,sensor_num:2}))}}));
+  const frame=Buffer.alloc(667); frame.write('XZYH'); frame.writeUInt16LE(1351,4);
+  frame.writeUInt32LE(651,6); payload.copy(frame,16);
+  const [packet]=packetize(frame,{channel:2,frameId:42,sequence:7,payloadBytes:667});
+  packet.writeUInt16LE(packet.readUInt16LE(18)|0x0800,18);
+  assert.equal(packet.length,695); assert.equal(packet.readUInt16LE(18),0x4e9b);
+  const input=JSON.stringify({op:'recv',b64:packet.toString('base64')})+'\n';
+  const result=spawnSync(globalThis.process.execPath,['bridge/sctp_oracle.js','serve'],{input,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
+  const delivered=result.stdout.trim().split('\n').map(JSON.parse).find(e=>e.ev==='frame');
+  assert(delivered,'NVR notification was silently discarded');
+  assert.equal(delivered.channel,3); // Existing notification link contract.
+  const body=Buffer.from(delivered.b64,'base64');
+  assert.deepEqual(body,frame);
+  assert.equal(JSON.parse(body.subarray(16,16+payload.length).toString()).payload.dev_list.length,4);
+});
+
+test('notification marker works on fragmented out-of-order frames', () => {
+  const data=Buffer.alloc(2501,0xab), frames=[];
+  const packets=packetize(data,{channel:2,frameId:43,sequence:8});
+  for(const p of packets)p.writeUInt16LE(p.readUInt16LE(18)|0x0800,18);
+  const receiver=new Reassembler((frame,ch)=>frames.push({frame,ch}));
+  for(const p of packets.reverse())assert.equal(receiver.push(p),true);
+  assert.deepEqual(frames,[{frame:data,ch:2}]); assert.equal(receiver.bufferedBytes,0);
+});
+
+test('notification support still rejects unrelated header bits and oversize payloads', () => {
+  const receiver=new Reassembler(()=>assert.fail('Invalid frame delivered'));
+  for(const flag of [0x1000,0x2000,0x8000]){
+    const [p]=packetize(Buffer.from('abc'),{channel:2,frameId:44});
+    p.writeUInt16LE(p.readUInt16LE(18)|flag,18);
+    assert.equal(receiver.push(p),false);
+  }
+  const [bad]=packetize(Buffer.from('abc'),{channel:2,frameId:45});
+  bad.writeUInt16LE(0x4c00|4,18); // Four bytes cannot fit a three-byte frame.
+  assert.equal(receiver.push(bad),false); assert.equal(receiver.bufferedBytes,0);
+});
+
 test('wire bytes match the PTCS header layout and fixed packet padding', () => {
   const [packet] = packetize(Buffer.from('abc'), {frameId: 0x12345678, sequence: 0x1234, channel: 5, payloadBytes: 8});
   assert.equal(packet.toString('hex'), '505443530305341278563412030000000000034400000000000000006162630000000000');
