@@ -1,3 +1,10 @@
+# Unreleased — presentation and offline review prep
+
+- Add original MIT-licensed EFX camera/recorder icon and logo for app and integration.
+- Mark the app stage experimental; add visible release-status links and honest notes.
+- Include local notification-parser and browser-registration regression work.
+- This prep is not a new version, an install instruction or hardware acceptance.
+
 # 0.8.0-alpha.6 — guided worker startup candidate
 
 - Carry guided-worker mode as an explicit non-secret command argument, so S6's
