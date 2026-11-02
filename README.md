@@ -2,9 +2,9 @@
 
 <img src="custom_components/eufy_nvr/brand/logo.png" alt="Eufy NVR Local by Efficient X" width="500">
 
-**Independent project by Efficient X (EFX). Unreleased experimental review candidate.**
+**Independent project by Efficient X (EFX). Experimental 0.8.0-alpha.7.**
 
-Eufy NVR Local by Efficient X (EFX) is an experimental Home Assistant app and integration for Eufy PoE recorders. It aims to bring fixed and tracking feeds into shared camera tiles that open into larger views. The unreleased candidate fixes a reproduced packet-parser rejection and a browser registration race. Offline tests pass; fresh-install live-camera acceptance is still pending. Eufy internet sign-in and signalling remain required. Keep an existing working camera setup in place. Independent project; not endorsed by eufy or Home Assistant. Optional support: https://buymeacoffee.com/efficientx
+Eufy NVR Local by Efficient X (EFX) is an experimental Home Assistant app and integration for Eufy PoE recorders. It aims to bring fixed and tracking feeds into shared camera tiles that open into larger views. Alpha.7 fixes a reproduced packet-parser rejection and a browser registration race. Offline tests pass; fresh-install live-camera acceptance is still pending. Eufy internet sign-in and signalling remain required. Keep an existing working camera setup in place. Independent project; not endorsed by eufy or Home Assistant. Optional support: https://buymeacoffee.com/efficientx
 
 ## Current status
 
@@ -13,7 +13,7 @@ That does not validate the replacement app. The replacement's hardware discovery
 did not complete in its last alpha.6 trial. The local correction and card repair
 need the acceptance gates listed in [release notes](RELEASE_NOTES.md).
 
-[Published alpha.6 status](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.6) · [Release history](https://github.com/Efficient-X/Eufy-NVR-Local/releases)
+[Alpha.7 release status](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.7) Â· [Release history](https://github.com/Efficient-X/Eufy-NVR-Local/releases)
 
 ## Two parts
 
@@ -38,4 +38,4 @@ Adapted mega-yfue/eufy-sdk code retains Apache-2.0 and provenance under
 `eufy_nvr/licenses/`. See [third-party notices](THIRD_PARTY.md). Original camera/
 recorder artwork is MIT-licensed in [artwork/LICENSE](artwork/LICENSE).
 
-This prep does not publish a version or change the existing alpha.6 tag/images.
+Alpha.7 uses a new version; the existing alpha.6 tag and images remain unchanged.
