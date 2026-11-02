@@ -13,9 +13,9 @@ import yaml
 import stage_guided_candidate as guided
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0-alpha.6"
+VERSION = "0.8.0-alpha.7"
 # Unpublished app/integration UX candidate; never retarget published tags/images.
-APP_VERSION = "0.8.0-alpha.6"
+APP_VERSION = "0.8.0-alpha.7"
 PUBLIC_IMAGE = "ghcr.io/efficient-x/eufy-nvr-local"
 MANIFEST = "PUBLIC_SOURCE_MANIFEST.json"
 SOURCE_FILES = (

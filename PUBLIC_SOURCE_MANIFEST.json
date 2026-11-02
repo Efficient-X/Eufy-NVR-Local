@@ -37,12 +37,12 @@
       "size": 1086
     },
     "README.md": {
-      "sha256": "b3268a8869206625d07ea02fb44b7183390e830ee03af5d8cc454adff0678d4e",
-      "size": 2672
+      "sha256": "7f9fdb1ca3095ee956e7111b47f219be570e423437504957ecf1ecc6b5541ac4",
+      "size": 2643
     },
     "RELEASE_NOTES.md": {
-      "sha256": "5c78f8e54dcb8b4bb4af4e3a668db50a05325c0bdca5f742cb5c1f16ac646232",
-      "size": 1971
+      "sha256": "ac8b5b098261f528f043ac6b58398b822fdff3752e02b6a97eb20c486e7298d9",
+      "size": 1466
     },
     "THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -265,7 +265,7 @@
       "size": 13548
     },
     "custom_components/eufy_nvr/manifest.json": {
-      "sha256": "b63d828f6cb47987b23c603d1fa4a50e3623bd8cd1ef947285a6a0a5e2ede254",
+      "sha256": "bb17b8e97a2965084ac5f06501c6beef6e2267acf5520829d2532178bfcbe725",
       "size": 474
     },
     "custom_components/eufy_nvr/snapshot.py": {
@@ -325,8 +325,8 @@
       "size": 150
     },
     "eufy_nvr/CHANGELOG.md": {
-      "sha256": "59df17be9540933109466acdfdf07673441ae05db91043d05835d43f641ecf71",
-      "size": 31438
+      "sha256": "1106437d3f15ed6cb7d1a98de425e55b76bb96e56f894677db3d9b0b08ea5120",
+      "size": 32470
     },
     "eufy_nvr/DOCS.md": {
       "sha256": "eed65dd9489d10e9ff3e6cde33a509928b06aedccab78b1b563ae8cb0744973b",
@@ -337,8 +337,8 @@
       "size": 5028
     },
     "eufy_nvr/README.md": {
-      "sha256": "95a09db79a2e2d13cd93e9d5c367b55ee5a4fb67e17f7dccae2ac88c5f719c7e",
-      "size": 682
+      "sha256": "03138500235517ed462f1fad1de9527b624b3110a1d1fc0c4a937742e8d853db",
+      "size": 689
     },
     "eufy_nvr/THIRD_PARTY.md": {
       "sha256": "a9269076859a8f8945f1a7eef36ee9d122c4e45282054fe45bdc0415402f3266",
@@ -485,7 +485,7 @@
       "size": 3177
     },
     "eufy_nvr/config.yaml": {
-      "sha256": "360935328962d2fde16e0b24da5c1d59bf313cc3f4e3d66803c2727c0a4ec325",
+      "sha256": "0cd1619d9d8002fbe9cfc670b8cda7e920fdd42a11ff060b32e7a02ebc548cbf",
       "size": 1577
     },
     "eufy_nvr/guided-entry.sh": {
@@ -541,12 +541,12 @@
       "size": 55
     },
     "release-blurb.txt": {
-      "sha256": "94c05ca950fa70e420ae0947e9960937e61cb6b1fcc23e304e3efad0a8353284",
-      "size": 604
+      "sha256": "422932bee3621d8fa706befe347fc1dfbe385a2a822616b8bc45145d79b1b797",
+      "size": 389
     },
     "release-summary.txt": {
-      "sha256": "a6f139d13b50e1eaec317f31aac4e933927a2894f5cdec99cd5a79dc7ca57b76",
-      "size": 239
+      "sha256": "65c930bcc7395295a709e1f40b9107e53ba06ad080fa48ff12929593567f8c8e",
+      "size": 249
     },
     "repository.yaml": {
       "sha256": "ec865c3133f0d9abbff9f17308caba167f5f67cda62dafbab33ce5b2c0aa5f81",
@@ -689,7 +689,7 @@
       "size": 5522
     },
     "tests/test_protocol_release_hardening.py": {
-      "sha256": "5132c8ca7d7ff98e58d67ee3ddd2d5024ad276c7bc245bfa0cb7fb72f7eb217d",
+      "sha256": "99d01a99c246b887c948a378cda30657a2053b127d7be55569439b943110d252",
       "size": 5145
     },
     "tests/test_ptcs_discovery_pipeline.py": {
@@ -701,7 +701,7 @@
       "size": 7267
     },
     "tests/test_public_package.py": {
-      "sha256": "8f6b3d55da64a038141a83093f722ec4076b8b6dbd592b75f7cf717131c900b4",
+      "sha256": "b0740941881c97e3a2d0ef7c83a33689d1a8b6af3af3f9b90cbcbbe374ab89ec",
       "size": 3303
     },
     "tests/test_recovery_plan.py": {
@@ -713,7 +713,7 @@
       "size": 1852
     },
     "tests/test_release_packaging.py": {
-      "sha256": "ea936f8f4e7808314628de291d4b3f3b5d100685cb385e0485b43ccee4d5c4a0",
+      "sha256": "7e400848ddd9fab054d92e75ffd3c59b991e5df518c5177c41914d93903f25e6",
       "size": 11315
     },
     "tests/test_remembered_login.py": {
@@ -833,7 +833,7 @@
       "size": 10392
     },
     "tools/stage_public_repository.py": {
-      "sha256": "95935ac12eb2b92b44572617d5fc4dd8ec78d8f6d2dee44084f7ae2d834eac66",
+      "sha256": "38e3ad8ffc7d6b2185f757fff4f28f21cb47831f4b8e43329f2c7632e7a33a62",
       "size": 13674
     },
     "tools/verify_candidate.py": {
@@ -842,5 +842,5 @@
     }
   },
   "format": 1,
-  "version": "0.8.0-alpha.6"
+  "version": "0.8.0-alpha.7"
 }

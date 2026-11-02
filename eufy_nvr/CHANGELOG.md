@@ -1,11 +1,27 @@
-# Unreleased — presentation and offline review prep
+# 0.8.0-alpha.7 â€” experimental parser and camera-card candidate
+
+- Correct the reproduced dual-lens notification-parser rejection while retaining
+  packet bounds, and repair camera-card registration with scoped registries.
+- Include original EFX app/integration artwork and clear experimental status.
+- Give the app and integration the same new alpha.7 version. Published alpha.6
+  tags, images and release assets remain unchanged.
+- Fresh-install real-NVR discovery, all live lenses, enlargement, tablet playback,
+  latency/resource use and restart/recovery still need exact-version acceptance.
+  Keep the working NVR engine and do not run two video engines concurrently.
+- Eufy internet sign-in and signalling are still required. Video is designed
+  for the home network; this is not a fully offline integration.
+
+This release is experimental. Check the exact tagged commit and its validation
+results; publication does not establish real-camera acceptance.
+
+# Unreleased â€” presentation and offline review prep
 
 - Add original MIT-licensed EFX camera/recorder icon and logo for app and integration.
 - Mark the app stage experimental; add visible release-status links and honest notes.
 - Include local notification-parser and browser-registration regression work.
 - This prep is not a new version, an install instruction or hardware acceptance.
 
-# 0.8.0-alpha.6 — guided worker startup candidate
+# 0.8.0-alpha.6 â€” guided worker startup candidate
 
 - Carry guided-worker mode as an explicit non-secret command argument, so S6's
   environment restoration cannot send a saved-account startup into legacy login.
@@ -21,7 +37,7 @@
 This candidate still needs native and real-camera acceptance. Alpha.5's guided
 login passed on hardware, but its video worker failed; the old engine was restored.
 
-## 0.8.0-alpha.5 — corrective experimental publication
+## 0.8.0-alpha.5 â€” corrective experimental publication
 
 - Supersede the withdrawn alpha.4 publication without moving its public tag.
 - Retain the reviewed setup and recovery implementation; rebuild and test
@@ -465,7 +481,7 @@ worker failed before camera acceptance; publication is not a live-video pass.
 
 - **More login regions + a separate account country.** The `region` option now offers
   US | EU | IE (the eufy *server* your account lives on), and a new optional `country` field
-  lets accounts registered outside those regions — e.g. AU — authenticate against the nearest
+  lets accounts registered outside those regions â€” e.g. AU â€” authenticate against the nearest
   server while still identifying their real country. Leave `country` blank to use the region.
 - Removed a hard-coded device-serial fallback from the bridge; it now relies on auto-discovery
   or the optional `station_sn` override.
@@ -485,15 +501,15 @@ worker failed before camera acceptance; publication is not a live-video pass.
 - **Live view now actually plays.** The bridge transcodes the NVR's HEVC to **H.264**
   (libx264 ultrafast/zerolatency, ~1s GOP) before publishing, so Home Assistant's browser
   live view renders it. Previously the stream was raw H.265 (`-c:v copy`), which most
-  browsers can't play live — you'd get the snapshot thumbnail but "enlarge" never loaded.
+  browsers can't play live â€” you'd get the snapshot thumbnail but "enlarge" never loaded.
   This is the headline fix and is always on.
 - **Optional low-latency "keep-warm"** (`keep_warm`, default **off**). Holds each online
   camera warm so opening live view is near-instant instead of waiting 5-13s for the WebRTC
   cold start. It's **off by default** because it runs one continuous H.264 software encode
-  per online camera — only enable it on a host with CPU headroom (3-4 always-on encodes can
+  per online camera â€” only enable it on a host with CPU headroom (3-4 always-on encodes can
   saturate a low-power Pi). The NVR itself streams all channels concurrently, so the NVR side
   is fine; the cost is host CPU. Pair with `video_copy` for a cheap always-on warm.
-- **`video_copy` option** (default off). Publishes raw H.265 instead of transcoding — lower
+- **`video_copy` option** (default off). Publishes raw H.265 instead of transcoding â€” lower
   CPU, but the live view is thumbnail-only. Replaces the undocumented `EUFY_VIDEO_COPY` env.
 - **Periodic re-login** (`token_refresh_hours`, default 6) refreshes `auth.json` so a warm
   stream that drops can reconnect past the ~1-day eufy session-token lifetime.
@@ -502,11 +518,11 @@ worker failed before camera acceptance; publication is not a live-video pass.
 
 - Fix: headless discovery (`--discover`) now exits when it completes, so the add-on
   reliably moves on to start go2rtc instead of hanging (previously it could loop on
-  `STATS … video=0` and never start the streams).
+  `STATS â€¦ video=0` and never start the streams).
 
 ## 0.4.0
 
-- Headless **email/password login** — no more one-time token paste. On start the add-on
+- Headless **email/password login** â€” no more one-time token paste. On start the add-on
   logs into the eufy passport, derives your NVR's `station_sn`, and writes `auth.json`.
 - Auto-discovers the NVR + cameras (cmd 9100) and serves each channel as RTSP/WebRTC via
   a bundled, pinned go2rtc.

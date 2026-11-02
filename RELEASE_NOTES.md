@@ -1,27 +1,27 @@
-# Unreleased review candidate — Eufy NVR Local
+# 0.8.0-alpha.7 — experimental
 
-**Not a stable release. No version/tag has been assigned or published for this prep.**
+**Experimental software. Not a stable release. Real-camera acceptance is pending.**
 
-Eufy NVR Local by Efficient X (EFX) is an experimental Home Assistant app and integration for Eufy PoE recorders. It aims to bring fixed and tracking feeds into shared camera tiles that open into larger views. The unreleased candidate fixes a reproduced packet-parser rejection and a browser registration race. Offline tests pass; fresh-install live-camera acceptance is still pending. Eufy internet sign-in and signalling remain required. Keep an existing working camera setup in place. Independent project; not endorsed by eufy or Home Assistant. Optional support: https://buymeacoffee.com/efficientx
+This version packages the reviewed dual-lens notification-parser correction,
+camera-card registration repair, matching app/integration versions and EFX artwork.
+The published alpha.6 tag, images and assets remain unchanged.
 
-## Tested offline
+## Validation and limits
 
-- Four synthetic notification pipelines for four/eight dual-lens ports fail on
-  the immutable alpha.6 parser and pass with the correction; packet bounds remain.
-- Actual Chrome reproduces the scoped-registry replacement failure; four local
-  module-loading scenarios pass with the registration repair.
-- 646 Python tests and 16 Python subtests pass; five environment-dependent cases
-  skip. All 16 Node test units pass.
-- Recovery simulations plus real Windows subprocess/loopback HTTP checks cover
-  accepted timeouts, delayed starts and truthful deadline failures. They do not
-  validate Home Assistant Supervisor completion fences or real-camera recovery.
+Check GitHub Actions for the exact tagged commit's native AMD64/ARM64 builds,
+Python/Node tests, S6 startup checks and image/source audits. Local Windows
+release-packaging checks passed, with symlink cases skipped where Windows could
+not create the test links. These results do not prove household video playback.
 
-## Still required before recommending a fresh installation
+Owner sign-in, recorder discovery, all fixed/tracking lenses, enlargement,
+Galaxy/browser playback, latency/CPU, restart and recovery require real-system
+acceptance. Keep the working engine. Do not run both video engines concurrently.
+No three-minute recovery guarantee is made.
 
-Native AMD64/ARM64/S6 tests for these exact bytes, isolated HA/Supervisor and
-Galaxy/browser checks, real NVR discovery/all lenses, latency/CPU and restart/
-bounded-fallback acceptance. Passing a synthetic test is not a working-camera
-claim. Do not run two NVR video engines concurrently.
+Eufy internet sign-in and signalling are required. Video is designed for the home
+network; this is not a fully offline connection. Independent Efficient X (EFX)
+project, not endorsed by eufy or Home Assistant. Free software; optional support:
+https://buymeacoffee.com/efficientx
 
-Current published alpha.6 status: https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.6
-That older release does **not** contain these unreleased fixes.
+[This release](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.7)
+· [Previous alpha.6 status](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.6)

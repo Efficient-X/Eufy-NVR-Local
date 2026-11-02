@@ -1,1 +1,1 @@
-Experimental review candidate: offline parser and browser-registration fixes tested. Fresh-install live video, native containers, tablet and recovery acceptance remain pending. Keep your working engine. Eufy internet sign-in is required.
+Experimental alpha.7: dual-lens notification-parser and camera-card registration fixes, matching package versions and EFX artwork. Real-camera acceptance remains pending. Keep your working engine. Eufy internet sign-in and signalling are required.
