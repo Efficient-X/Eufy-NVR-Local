@@ -1,0 +1,14 @@
+<!-- SPDX-License-Identifier: MIT. Original artwork, Copyright 2026 Efficient X (EFX). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+ <g stroke="#38C9DE" stroke-width="8" stroke-linejoin="round" fill="#14283F">
+  <path d="M90 144V176H128V196" fill="none"/>
+  <rect x="4" y="22" width="172" height="122" rx="15"/>
+  <path d="M176 58L248 4V164L176 112Z"/>
+  <rect x="4" y="196" width="248" height="56" rx="12"/>
+ </g>
+ <circle cx="90" cy="83" r="38" fill="none" stroke="white" stroke-width="9"/>
+ <circle cx="90" cy="83" r="10" fill="white"/>
+ <circle cx="32" cy="224" r="7" fill="#7AE3AE"/>
+ <circle cx="60" cy="224" r="7" fill="#7AE3AE"/>
+ <rect x="99" y="211" width="130" height="26" fill="none" stroke="#38C9DE" stroke-width="4"/>
+</svg>

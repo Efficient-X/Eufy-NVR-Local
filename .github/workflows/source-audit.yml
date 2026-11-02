@@ -53,6 +53,15 @@ jobs:
             -c 'import av, aiortc, guided_launcher, setup_web, startup_controller'
           docker run --rm --network none --entrypoint node eufy-source-audit \
             /opt/eufy/bridge/sctp_oracle.js selftest
+      - name: Test observed notification flags with the packaged native Node bridge
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 2 \
+            --mount "type=bind,source=$PWD/tests,target=/opt/eufy/tests,readonly" \
+            --workdir /opt/eufy --entrypoint node eufy-source-audit \
+            --test tests/test_ptcs_transport.mjs
       - name: Test actual H264 HEVC Opus and AAC tools with synthetic media
         run: |
           docker run --rm --network none --read-only \

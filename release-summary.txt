@@ -1,0 +1,1 @@
+Experimental review candidate: offline parser and browser-registration fixes tested. Fresh-install live video, native containers, tablet and recovery acceptance remain pending. Keep your working engine. Eufy internet sign-in is required.

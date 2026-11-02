@@ -353,12 +353,43 @@ export class EufySharedTilesEditor extends HTMLElement {
     this.append(help);
   }
 }
-if (!customElements.get('eufy-shared-tiles')) customElements.define('eufy-shared-tiles', EufySharedTiles);
 // A distinct picker type avoids an older manually installed shared-tiles module
 // silently winning the custom-element name and ignoring automatic layout.
 export class EufyNvrCameras extends EufySharedTiles {}
-if (!customElements.get('eufy-nvr-cameras')) customElements.define('eufy-nvr-cameras', EufyNvrCameras);
-if (!customElements.get('eufy-nvr-cameras-editor')) customElements.define('eufy-nvr-cameras-editor', EufySharedTilesEditor);
+export function registerCardElements(registry = customElements) {
+  for (const [name, constructor] of [
+    ['eufy-shared-tiles', EufySharedTiles],
+    ['eufy-nvr-cameras', EufyNvrCameras],
+    ['eufy-nvr-cameras-editor', EufySharedTilesEditor],
+  ]) {
+    if (!registry.get(name)) registry.define(name, constructor);
+  }
+}
+
+export async function ensureCardRegistration({ getRegistry = () => customElements,
+  now = () => performance.now(), delay = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  timeoutMs = 60000 } = {}) {
+  const deadline = now() + timeoutMs;
+  // HA's scoped-registry polyfill replaces window.customElements. A promise
+  // from whenDefined() on the old native registry can wait forever. Poll the
+  // CURRENT registry until HA's own element proves the replacement is ready,
+  // then restore only our missing definitions. No page reload or global patch.
+  // This also handles a cached module imported by both extra_js and Lovelace.
+  while (!getRegistry().get('home-assistant')) {
+    if (now() >= deadline) throw new Error(
+      'Eufy NVR card registration timed out waiting for Home Assistant. Reload this page after Home Assistant has finished loading.');
+    await delay(Math.min(250, deadline - now()));
+  }
+  registerCardElements(getRegistry());
+  return true;
+}
+
+registerCardElements();
+export const registrationReady = typeof window === 'undefined' ? Promise.resolve(true) :
+  ensureCardRegistration().catch(error => {
+    console.error('[Eufy NVR] Card registration failed', error);
+    return false;
+  });
 if (typeof window !== 'undefined') {
   window.customCards = window.customCards || [];
   if (!window.customCards.some(card => card.type === 'eufy-nvr-cameras')) {

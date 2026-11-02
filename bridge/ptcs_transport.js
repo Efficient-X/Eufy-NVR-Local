@@ -40,7 +40,12 @@ function packetize(frame, {channel = 0, frameId, payloadBytes = 1000, sequence =
 function parseHeader(packet) {
   if (!Buffer.isBuffer(packet) || packet.length < HEADER || packet.toString("ascii", 0, 4) !== "PTCS" || packet[4] !== 3) return null;
   const flags = packet.readUInt16LE(18);
-  if ((flags & 0xfc00) !== 0x4000 && (flags & 0xfc00) !== 0x4400) return null;
+  // Actual NVR notifications also set 0x0800 (observed flags 0x4e9b).
+  // It is independent of the last-chunk/length fields. The pinned upstream
+  // parser extracts those fields without rejecting this marker. Preserve the
+  // type nibble check and all size/reassembly bounds below; infer no meaning
+  // for the marker beyond accepting this observed wire variant.
+  if ((flags & 0xf000) !== 0x4000) return null;
   const payloadLength = flags & 0x03ff;
   const frameLength = packet.readUInt32LE(12);
   const index = packet.readUInt16LE(16);
