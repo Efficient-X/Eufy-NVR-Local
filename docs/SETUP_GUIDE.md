@@ -323,3 +323,8 @@ The app keeps two small private startup-status files, with fixed step names and
 network-error categories only. They replace their previous contents; they do not
 store passwords, tokens, URLs, account names or raw error replies. The last startup
 result survives a normal stop so support can distinguish where startup ended.
+
+The same fixed-format status is also written to the app log when a startup step
+changes. This lets an administrator check the state, warning and connection-error
+category through Home Assistant even if the setup page or video API is unavailable.
+Only approved step names and categories are logged, never raw error messages.
