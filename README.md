@@ -1,3 +1,7 @@
+> Draft source candidate: alpha.8 shortens and bounds guided startup retries and
+> retains secret-safe startup status. It has not been released or accepted on a
+> physical recorder. See [candidate notes](RELEASE_NOTES.md).
+
 # Eufy NVR Local
 
 <img src="custom_components/eufy_nvr/brand/logo.png" alt="Eufy NVR Local by Efficient X" width="500">

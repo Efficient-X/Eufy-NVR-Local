@@ -1,3 +1,18 @@
+# Draft 0.8.0-alpha.8 - bounded camera startup
+
+This source candidate fixes an early startup timeout. Guided startup now has one
+shared two-minute discovery window and up to four connection attempts, instead of
+two nested groups of three attempts. A valid slow discovery can finish after the
+old110-second limit. Normal success returns as soon as the video service is ready;
+it does not wait for the deadline. Local setup and cleanup have finite limits too.
+
+Setup shows the last startup step and keeps only fixed, secret-safe status labels.
+A local connection that does not answer is not described as a bad Eufy password.
+
+This is a draft development candidate. Native Linux/S6, image-build and physical
+recorder checks are required before release or household deployment. The reproduced
+timing defect has not been established as the cause of a specific failed installation.
+
 # 0.8.0-alpha.7 — experimental
 
 **Experimental software. Not a stable release. Real-camera acceptance is pending.**
