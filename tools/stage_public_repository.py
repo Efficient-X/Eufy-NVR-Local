@@ -13,9 +13,9 @@ import yaml
 import stage_guided_candidate as guided
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0-alpha.7"
+VERSION = "0.8.0-alpha.8"
 # Unpublished app/integration UX candidate; never retarget published tags/images.
-APP_VERSION = "0.8.0-alpha.7"
+APP_VERSION = "0.8.0-alpha.8"
 PUBLIC_IMAGE = "ghcr.io/efficient-x/eufy-nvr-local"
 MANIFEST = "PUBLIC_SOURCE_MANIFEST.json"
 SOURCE_FILES = (
@@ -68,6 +68,7 @@ SOURCE_FILES = (
     'bridge/start_bridge.cmd',
     'bridge/start_bridge.sh',
     'bridge/startup_controller.py',
+    'bridge/startup_policy.py',
     'bridge/token_expiry.py',
     'bridge/video_diagnostics.py',
     'bridge/video_pipeline.py',
@@ -141,6 +142,7 @@ SOURCE_FILES = (
     'eufy_nvr/bridge/start_bridge.cmd',
     'eufy_nvr/bridge/start_bridge.sh',
     'eufy_nvr/bridge/startup_controller.py',
+    'eufy_nvr/bridge/startup_policy.py',
     'eufy_nvr/bridge/token_expiry.py',
     'eufy_nvr/bridge/video_diagnostics.py',
     'eufy_nvr/bridge/video_pipeline.py',
@@ -178,6 +180,8 @@ SOURCE_FILES = (
     'tests/test_guided_health.py',
     'tests/test_guided_packaging.py',
     'tests/test_guided_startup.py',
+    'tests/test_guided_slow_start.py',
+    'tests/test_startup_policy.py',
     'tests/test_hardening_api.py',
     'tests/test_hardening_generator.py',
     'tests/test_hardening_snapshot.py',

@@ -175,3 +175,9 @@ assert.match(switchReadiness({hasSession:false,secondsLeft:590,replyAge:1,state:
 assert.match(switchReadiness({hasSession:true,secondsLeft:NaN,replyAge:1,state:'video_port_in_use'}), /Keep the old app running/);
 assert.match(switchReadiness({hasSession:true,secondsLeft:590,replyAge:1,state:'sign_in_required'}), /not confirmed/);
 console.log('Post-backup session/reply/port-state preflight checks passed.');
+
+// Fixed-vocabulary startup evidence is readable; arbitrary server strings stay hidden.
+assert.match(explainRuntime({state:'starting_video',startup:{limit_seconds:239}}), /4 minutes/);
+assert.match(explainRuntime({state:'service_error',startup:{worker_phase:'discovering',video_transport:'connection_refused'}}), /finding the recorder and cameras/);
+assert.match(explainRuntime({state:'service_error',startup:{worker_phase:'discovering',video_transport:'connection_refused'}}), /not accepting connections/);
+assert.ok(!explainRuntime({state:'service_error',startup:{worker_phase:'private token URL',video_transport:'private token URL'}}).includes('private token URL'));

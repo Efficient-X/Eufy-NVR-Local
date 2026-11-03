@@ -27,14 +27,27 @@ export function explainRuntime(runtime) {
     renewing_sign_in: "Renewing access using the sign-in you chose to remember. A picture check or email code will stop automatic renewal and ask you to sign in here.",
     setup_required: "There is no usable saved connection. Sign in below to connect your recorder.",
     sign_in_required: "Eufy rejected the saved sign-in. Sign in below again; restarting Home Assistant will not renew it.",
-    starting_video: "Starting the camera service. This may take up to two minutes.",
+    starting_video: "Finding your cameras and starting the video service. The app can try up to four connections within one two-minute discovery window. You can leave this page and reopen it; do not repeat sign-in while startup is running.",
     video_service_running: "The camera service is running. Open a camera tile to check that the picture is live.",
     connection_unavailable: "We cannot check the saved sign-in right now. Your details are kept. Check the internet connection; the app will retry later without guessing your password.",
     video_port_in_use: "Your account check passed, but another camera app is using the video port. Your saved connection is kept. A planned switch from the old app is needed; do not re-enter your Eufy password or stop apps at random.",
     service_error: "The camera service could not start or stopped. It will not keep restarting in a loop. Check the app log, then try the connection again.",
     stopped: "The camera service has stopped.",
   })[runtime.state] || "Checking the camera service.";
-  return message + (runtime.warning === "account_check_unavailable" && runtime.state === "video_service_running"
+  const details = runtime.startup || {};
+  const limit = Number.isInteger(details.limit_seconds) && details.limit_seconds > 0 && details.limit_seconds <= 1200
+    ? " Allow up to " + Math.ceil(details.limit_seconds / 60) + " minutes for all attempts; startup stops if it cannot finish."
+    : "";
+  const phase = ({validating_account: "checking the saved account file", discovering: "finding the recorder and cameras",
+    generating_config: "preparing the camera list", starting_listener: "opening the local video service",
+    launching_worker: "launching the video software"})[details.worker_phase];
+  const progress = runtime.state === "starting_video" ? limit
+    : runtime.state === "service_error" && phase ? " Last step reached: " + phase + "." : "";
+  const transport = ({connection_refused: "The local video service was not accepting connections.",
+    connection_reset: "The local video connection was closed before it answered.",
+    timeout: "The local video connection did not answer in time.",
+    network_unreachable: "The local video connection could not be reached."})[details.video_transport];
+  return message + progress + (runtime.state === "service_error" && transport ? " " + transport : "") + (runtime.warning === "account_check_unavailable" && runtime.state === "video_service_running"
     ? " Eufy's sign-in check is temporarily unavailable; the running service has been left alone." : "");
 }
 export function explainStatus(status) {
@@ -226,4 +239,3 @@ export function mountSetup(doc, request = globalThis.fetch.bind(globalThis)) {
   return { render, send, clearSensitive };
 }
 if (typeof document !== "undefined") mountSetup(document);
-

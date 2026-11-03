@@ -110,9 +110,9 @@ async def test_watch_and_expiry_tasks_have_bounded_liveness(tmp_path):
     async with TestClient(TestServer(app)) as http:
         health = app[setup_web.HEALTH]
         await asyncio.sleep(0)
-        health.beats["watch"] -= 240
+        health.beats["watch"] -= setup_web.WATCH_LIVENESS_SECONDS - 1
         assert (await http.get("/healthz", headers={"X-Health-Nonce": NONCE})).status == 200
-        health.beats["watch"] -= 61
+        health.beats["watch"] -= 2
         assert (await http.get("/healthz", headers={"X-Health-Nonce": NONCE})).status == 503
         health.beat("watch")
         health.beats["sweep"] -= 31
@@ -182,4 +182,3 @@ async def test_probe_network_error_is_quiet(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(guided_launcher, "ClientSession", broken)
     assert not await guided_launcher.probe_health(path)
     assert capsys.readouterr() == ("", "")
-

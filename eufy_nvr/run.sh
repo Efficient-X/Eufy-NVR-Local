@@ -24,6 +24,11 @@ elif [ "$#" -ne 0 ]; then
     bashio::log.fatal "Unsupported video-worker startup mode."
     exit 2
 fi
+export EUFY_GUIDED_WORKER="${GUIDED_WORKER}"
+startup_phase() {
+    if [ "${GUIDED_WORKER}" = 1 ]; then python3 startup_policy.py "$1"; fi
+}
+startup_phase validating_account
 
 if [ "${GUIDED_WORKER}" != 1 ] && { ! bashio::config.has_value 'email' || ! bashio::config.has_value 'password'; }; then
     bashio::log.fatal "Set 'email' and 'password' (your eufy account) in the add-on configuration."
@@ -148,14 +153,17 @@ fi
 DISCOVERY_FATAL=0
 discover_and_generate() {
     local attempt rc log_file
-    # eufy_run.py already opens up to three fresh signaling sessions per call.
-    # Two outer attempts allow one complete retry after a transient cloud/NVR busy period.
-    for attempt in 1 2; do
+    # Guided mode has one shared discovery budget inside eufy_run.py.
+    # Preserve the legacy two-pass policy only outside guided startup.
+    local passes="1 2"
+    if [ "${GUIDED_WORKER}" = 1 ]; then passes="1"; fi
+    for attempt in ${passes}; do
         log_file="${STATE_DIR}/discovery-attempt-${attempt}.log"
         : > "${log_file}"
         bashio::log.info "Auto-discovering NVR + cameras (supervised attempt ${attempt}/2)..."
 
         set +o errexit
+        startup_phase discovering
         python3 eufy_run.py --discover 2> >(tee "${log_file}" >&2)
         rc=$?
         set -o errexit
@@ -173,6 +181,7 @@ discover_and_generate() {
 
         if [ "${rc}" -eq 0 ] && [ -s "${EUFY_CAMERAS}" ]; then
             bashio::log.info "Discovery OK -> ${EUFY_CAMERAS}"
+            startup_phase generating_config
             if python3 gen_go2rtc.py "127.0.0.1"; then
                 install -m 600 "${BRIDGE_DIR}/go2rtc.yaml" "${CONFIG_PATH}"
                 bashio::log.info "Generated go2rtc.yaml from discovered cameras."
@@ -184,7 +193,7 @@ discover_and_generate() {
             bashio::log.warning "Discovery failed after supervised signaling retries (rc=${rc})."
         fi
 
-        sleep "$((attempt * 5))"
+        if [ "${GUIDED_WORKER}" != 1 ]; then sleep "$((attempt * 5))"; fi
     done
     return 1
 }
@@ -195,6 +204,7 @@ if ! discover_and_generate; then
         sleep 15
         exit 1
     fi
+    startup_phase generating_config
     if [ -s "${EUFY_CAMERAS}" ] && python3 gen_go2rtc.py "127.0.0.1"; then
         install -m 600 "${BRIDGE_DIR}/go2rtc.yaml" "${CONFIG_PATH}"
         bashio::log.warning "Discovery failed; regenerated go2rtc.yaml from the last discovered camera list (${EUFY_CAMERAS})."
@@ -290,6 +300,7 @@ backoff=2
 while true; do
     bashio::log.info "Starting go2rtc (RTSP :${GO2RTC_RTSP_PORT}, WebRTC :${GO2RTC_WEBRTC_PORT}, API/UI :${GO2RTC_API_PORT}, log=${LOG_LEVEL})..."
     started=$(date +%s)
+    startup_phase starting_listener
     ./bin/go2rtc -config "${CONFIG_PATH}" &
     GO2RTC_PID=$!
 

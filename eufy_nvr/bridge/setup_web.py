@@ -20,6 +20,7 @@ from aiohttp import web
 from account_setup import AccountSetup
 from setup_budget import SetupBudget
 from ha_setup_trust import TrustUnavailable
+from startup_policy import WATCH_LIVENESS_SECONDS
 
 STATIC = Path(__file__).with_name("setup_ui")
 COUNTRIES = {
@@ -59,7 +60,7 @@ class ServiceHealth:
                 if not task.cancelled():
                     task.exception()
                 return False
-            limit = 300 if name == "watch" else 30
+            limit = WATCH_LIVENESS_SECONDS if name == "watch" else 30
             if self.clock() - self.beats.get(name, float("-inf")) > limit:
                 return False
         return True
@@ -324,4 +325,3 @@ def create_app(*, auth_path, budget_path, allowed_users=(), allowed_origins=(),
     # Dynamic path is restricted to a fixed list, never a file name.
     app.router.add_post("/api/{operation:start|captcha|verify|select|cancel|retry|forget}", action)
     return app
-

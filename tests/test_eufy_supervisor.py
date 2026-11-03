@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Model normal script execution, where the bridge directory is on sys.path.
+sys.path.insert(0, str(ROOT / "bridge"))
 SPEC = importlib.util.spec_from_file_location("eufy_run", ROOT / "bridge/eufy_run.py")
 supervisor = importlib.util.module_from_spec(SPEC)
 # Python 3.13's dataclasses implementation resolves annotations through

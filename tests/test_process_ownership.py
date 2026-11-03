@@ -131,7 +131,7 @@ async def test_shell_exit_does_not_interrupt_remaining_child_cleanup(monkeypatch
 async def test_retry_cleans_old_owner_before_any_new_launch(monkeypatch):
     worker = guided_launcher.MediaWorker()
     worker.process = SimpleNamespace(returncode=0)
-    stop = AsyncMock()
+    stop = AsyncMock(side_effect=lambda: setattr(worker, "process", None))
     monkeypatch.setattr(worker, "stop", stop)
     monkeypatch.setattr(worker, "port_open", AsyncMock(return_value=True))
     with pytest.raises(RuntimeError, match="already in use"):

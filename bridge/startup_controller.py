@@ -12,6 +12,8 @@ import aiohttp
 import eufy_cloud as ec
 from auth_login import sign_response_is_live
 from token_expiry import next_check_delay
+from startup_policy import (ACCOUNT_CHECK_SECONDS, WORKER_CONTROL_SECONDS,
+                            retain_status, read_status, transport_category)
 
 
 def read_guided_cache(path):
@@ -53,7 +55,7 @@ def classify_sign_response(status, body):
     return "unavailable"
 
 
-async def check_saved_account(path):
+async def check_saved_account(path, *, transport_report=None):
     cached = read_guided_cache(path)
     if cached is None:
         return "missing"
@@ -67,6 +69,8 @@ async def check_saved_account(path):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
             async with session.get(url, headers=headers, allow_redirects=False) as response:
+                if transport_report is not None:
+                    transport_report("http_response")
                 if response.status in {401, 403}:
                     return "rejected"
                 raw = bytearray()
@@ -75,7 +79,9 @@ async def check_saved_account(path):
                     if len(raw) > 65536:
                         return "unavailable"
                 return classify_sign_response(response.status, json.loads(raw))
-    except (OSError, ValueError, TypeError, aiohttp.ClientError, TimeoutError):
+    except (OSError, ValueError, TypeError, aiohttp.ClientError, TimeoutError) as error:
+        if transport_report is not None and not isinstance(error, (ValueError, TypeError)):
+            transport_report(transport_category(error))
         return "unavailable"
 
 
@@ -88,26 +94,54 @@ class StartupController:
 
     def __init__(self, auth_path, worker, *, checker=check_saved_account,
                  clock=time.monotonic, check_interval=21600, retry_interval=60,
-                 local_credentials_check=None, renewal=None, wall_clock=time.time):
+                 local_credentials_check=None, renewal=None, wall_clock=time.time, status_path=None):
         self.auth_path, self.worker, self.checker = Path(auth_path), worker, checker
         self.clock = clock
         self.wall_clock = wall_clock
         self._reload_after_renewal = False
         self.check_interval, self.retry_interval = check_interval, retry_interval
         self.state, self.warning = "checking_account", None
+        self.status_path, self.account_transport = status_path, None
+        previous = read_status(status_path, "runtime") if status_path else None
+        self.last_result = previous.get("last_result") if previous else None
         self._next_check = 0
         self._lock = asyncio.Lock()
         self._task = None
         self._closed = False
         self.local_credentials_check = local_credentials_check
         self.renewal = renewal
+        self._set_status("checking_account")
+
+    def _set_status(self, state, warning=None):
+        self.state, self.warning = state, warning
+        phase = self.worker.startup_status() if hasattr(self.worker, "startup_status") else None
+        result = {"state": state, "warning": warning,
+            "account_transport": self.account_transport,
+            "video_transport": getattr(self.worker, "last_transport", None),
+            "worker_phase": phase["phase"] if phase else None}
+        if state in {"local_video_setup_required", "setup_required", "sign_in_required",
+                     "connection_unavailable", "service_error", "video_port_in_use", "video_service_running"}:
+            self.last_result = result
+        retain_status(self.status_path, "runtime", {**result, "last_result": self.last_result})
+
+    async def _check(self):
+        self.account_transport = None
+        if self.checker is check_saved_account:
+            return await self.checker(self.auth_path, transport_report=lambda kind: setattr(self, "account_transport", kind))
+        return await self.checker(self.auth_path)
 
     def can_setup(self):
         return (not self._closed and not self._lock.locked() and not self.worker.running()
                 and self.state in {"setup_required", "sign_in_required"})
 
     def public_status(self):
+        detail = self.worker.startup_status() if hasattr(self.worker, "startup_status") else None
         return {"state": self.state, "warning": self.warning,
+                "startup": {"worker_phase": detail["phase"] if detail else None,
+                            "account_transport": self.account_transport,
+                            "video_transport": getattr(self.worker, "last_transport", None),
+                            "limit_seconds": WORKER_CONTROL_SECONDS,
+                            "last_result": self.last_result},
                 **(self.renewal.public_status() if self.renewal else {}),
                 "can_setup": self.can_setup(),
                 "can_retry": not self._closed and not self._lock.locked()
@@ -118,18 +152,18 @@ class StartupController:
             return
         async with self._lock:
             running = self.worker.running()
-            self.state, self.warning = "checking_account", None
+            self._set_status("checking_account")
             if not running and self.local_credentials_check is not None:
                 try:
                     ready = self.local_credentials_check()
                 except Exception:
                     ready = False
                 if not ready:
-                    self.state = "local_video_setup_required"
+                    self._set_status("local_video_setup_required")
                     return
             try:
-                async with asyncio.timeout(20):
-                    outcome = await self.checker(self.auth_path)
+                async with asyncio.timeout(ACCOUNT_CHECK_SECONDS):
+                    outcome = await self._check()
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -140,12 +174,12 @@ class StartupController:
                     if not proactive:
                         await self.worker.stop()
                         running = False
-                    self.state = "renewing_sign_in"
+                    self._set_status("renewing_sign_in")
                     renewed = await self.renewal.renew()
                     if renewed == "renewed":
                         self._reload_after_renewal = True
-                        async with asyncio.timeout(20):
-                            outcome = await self.checker(self.auth_path)
+                        async with asyncio.timeout(ACCOUNT_CHECK_SECONDS):
+                            outcome = await self._check()
                         if outcome == "rejected":
                             self.renewal.pause()
                 except asyncio.CancelledError:
@@ -156,9 +190,9 @@ class StartupController:
                 try:
                     await self.worker.stop()
                 except Exception:
-                    self.state = "service_error"
+                    self._set_status("service_error")
                     return
-                self.state = "setup_required" if outcome == "missing" else "sign_in_required"
+                self._set_status("setup_required" if outcome == "missing" else "sign_in_required")
             elif outcome == "valid":
                 if self._reload_after_renewal:
                     try:
@@ -166,45 +200,44 @@ class StartupController:
                         running = False
                         self._reload_after_renewal = False
                     except Exception:
-                        self.state = "service_error"
+                        self._set_status("service_error")
                         return
                 if not running:
-                    self.state = "starting_video"
+                    self._set_status("starting_video")
                     try:
-                        async with asyncio.timeout(120):
+                        async with asyncio.timeout(WORKER_CONTROL_SECONDS):
                             await self.worker.start()
                     except asyncio.CancelledError:
                         await self.worker.stop()
                         raise
                     except VideoPortInUseError:
                         await self.worker.stop()
-                        self.state = "video_port_in_use"
+                        self._set_status("video_port_in_use")
                         return
                     except Exception:
                         await self.worker.stop()
-                        self.state = "service_error"
+                        self._set_status("service_error")
                         return
-                self.state = "video_service_running"
+                self._set_status("video_service_running")
                 delay = next_check_delay(read_guided_cache(self.auth_path),
                     self.wall_clock(), self.check_interval,
                     bool(self.renewal and self.renewal.can_renew()))
                 self._next_check = self.clock() + delay
             else:
                 # Keep a running producer on a temporary cloud/network failure.
-                self.state = "video_service_running" if running else "connection_unavailable"
-                self.warning = "account_check_unavailable"
+                self._set_status("video_service_running" if running else "connection_unavailable", "account_check_unavailable")
                 self._next_check = self.clock() + self.retry_interval
 
     def saved(self):
         """Call synchronously immediately after the wizard atomically saves."""
         if not self.can_setup():
             raise RuntimeError("Setup is not available")
-        self.state = "checking_account"  # blocks another write before the task runs
+        self._set_status("checking_account")  # blocks another write before the task runs
         self._task = asyncio.create_task(self.reconcile())
 
     def retry(self):
         if self.public_status()["can_retry"]:
-            self.state = "checking_account"
+            self._set_status("checking_account")
             self._task = asyncio.create_task(self.reconcile())
 
     def forget(self):
@@ -216,7 +249,7 @@ class StartupController:
         if self._closed or self._lock.locked():
             return
         if self.state == "video_service_running" and not self.worker.running():
-            self.state, self.warning = "service_error", None
+            self._set_status("service_error")
             return  # No unlimited restart/discovery storm.
         if (self.state in {"video_service_running", "connection_unavailable"}
                 and self.clock() >= self._next_check):
@@ -229,5 +262,4 @@ class StartupController:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
         await self.worker.stop()
-        self.state = "stopped"
-
+        self._set_status("stopped")

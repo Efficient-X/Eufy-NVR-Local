@@ -21,6 +21,7 @@ from startup_controller import StartupController, VideoPortInUseError, read_guid
 from auth_login import _write_private_json
 from setup_budget import SetupBudget
 from remembered_login import RememberedLogin
+from startup_policy import WORKER_READY_SECONDS, transport_category, read_status, retain_status
 
 STATE = Path("/data")
 HEALTH_FILE = Path("/run/eufy-guided-health.json")
@@ -86,11 +87,18 @@ def child_environment(source):
 
 class MediaWorker:
     """One isolated Linux process group, including every child video producer."""
-    def __init__(self, *, port=1985, stop_timeout=30):
+    def __init__(self, *, port=1985, stop_timeout=30, status_path=None,
+                 startup_timeout=WORKER_READY_SECONDS, clock=time.monotonic):
         self.port = port
         self.process = None
         self.stop_timeout = stop_timeout
         self._owned = None
+        self.status_path = status_path
+        self.startup_timeout, self.clock = startup_timeout, clock
+        self.last_transport = None
+
+    def startup_status(self):
+        return read_status(self.status_path, "worker") if self.status_path else None
 
     def running(self):
         return self.process is not None and self.process.returncode is None
@@ -102,38 +110,51 @@ class MediaWorker:
                 writer.close()
                 await writer.wait_closed()
                 return True
-        except (OSError, TimeoutError):
+        except (OSError, TimeoutError) as error:
+            self.last_transport = transport_category(error)
             return False
 
     async def start(self):
         if self.running():
             return
         if self.process is not None:
-            await self.stop()  # Finish the old tree before replacing its ownership handles.
+            # An uncertain old cleanup is never retried by the new-start handler.
+            await self.stop()
+        try:
+            async with asyncio.timeout(self.startup_timeout):
+                await self._start()
+        except BaseException:
+            if self.process is not None:
+                await self.stop()
+            raise
+
+    async def _start(self):
+        deadline = self.clock() + self.startup_timeout
         if await self.port_open():
             raise VideoPortInUseError("The video service port is already in use")
         if sys.platform.startswith("linux"):
             from process_ownership import OwnedProcesses, require_support
             require_support()  # Refuse to launch a tree we cannot safely track.
+        retain_status(self.status_path, "worker", {"phase": "launching_worker"})
         self.process = await asyncio.create_subprocess_exec(
             "/run.sh", "--guided-worker", env=child_environment(os.environ), start_new_session=True,
         )
-        try:
-            if sys.platform.startswith("linux"):
-                self._owned = OwnedProcesses(self.process.pid)
-                self._owned.refresh()
-            for _ in range(110):
-                if not self.running():
-                    raise RuntimeError("The video service stopped during startup")
-                if await self.port_open():
-                    if self._owned is not None:
-                        self._owned.refresh()
-                    return
-                await asyncio.sleep(1)
-            raise RuntimeError("The video service did not become ready")
-        except BaseException:
-            await self.stop()
-            raise
+        if sys.platform.startswith("linux"):
+            self._owned = OwnedProcesses(self.process.pid)
+            self._owned.refresh()
+        while self.clock() < deadline:
+            if not self.running():
+                raise RuntimeError("The video service stopped during startup")
+            if await self.port_open():
+                if self._owned is not None:
+                    self._owned.refresh()
+                self.last_transport = None
+                retain_status(self.status_path, "worker", {"phase": "listener_ready"})
+                return
+            if self._owned is not None:
+                self._owned.refresh()  # Capture nested sessions while still parented.
+            await asyncio.sleep(min(1, max(0, deadline - self.clock())))
+        raise RuntimeError("The video service did not become ready")
 
     async def stop(self):
         process = self.process
@@ -178,9 +199,11 @@ class MediaWorker:
 
 def build_app(token, *, health_nonce=None):
     budget = SetupBudget(STATE / "setup-budget.json")
-    runtime = StartupController(STATE / "auth.json", MediaWorker(),
+    retain_status(STATE / "startup-worker.json", "worker", {"phase": "not_started"})
+    runtime = StartupController(STATE / "auth.json", MediaWorker(status_path=STATE / "startup-worker.json"),
                                 local_credentials_check=local_video_ready,
-                                renewal=RememberedLogin(STATE / "auth.json", budget))
+                                renewal=RememberedLogin(STATE / "auth.json", budget),
+                                status_path=STATE / "startup-runtime.json")
     return create_app(
         auth_path=STATE / "auth.json", budget_path=STATE / "setup-budget.json",
         runtime=runtime, trust=HomeAssistantTrust(token), health_nonce=health_nonce,
@@ -229,4 +252,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

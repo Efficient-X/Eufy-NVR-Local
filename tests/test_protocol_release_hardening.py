@@ -49,7 +49,7 @@ def test_live_sessions_are_closed_before_process_teardown():
     assert 'if (\n            DISCOVER\n            or state["close_sent"]' not in stream
     assert "os.kill(proc.pid, signal.SIGINT)" in supervisor
     assert "timeout=3.0" in supervisor
-    assert "await asyncio.sleep(SESSION_RELEASE_DELAY)" in supervisor
+    assert "await asyncio.sleep(release_delay)" in supervisor
     assert "if not stop_event.is_set() and SESSION_RELEASE_DELAY" not in supervisor
 
 
@@ -112,7 +112,7 @@ def test_release_versions_and_go2rtc_are_aligned():
     config = (ROOT / "eufy_nvr/config.yaml").read_text()
     dockerfile = (ROOT / "eufy_nvr/Dockerfile").read_text()
     addon_version = yaml.safe_load(config)["version"]
-    assert (manifest["version"], addon_version) == ("0.8.0-alpha.7", "0.8.0-alpha.7")
+    assert (manifest["version"], addon_version) == ("0.8.0-alpha.8", "0.8.0-alpha.8")
     from packaging.version import Version
     assert Version(addon_version) >= Version("0.7.0")
     assert 'ARG GO2RTC_VERSION="v1.9.14"' in dockerfile

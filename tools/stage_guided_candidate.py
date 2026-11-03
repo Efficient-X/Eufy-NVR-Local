@@ -10,7 +10,7 @@ import sys
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0-dev.11"
+VERSION = "0.8.0-dev.12"
 MANIFEST = "SOURCE_MANIFEST.json"
 BRIDGE_FILES = (
     "account_setup.py", "auth_login.py", "browser_session_probe.py",
@@ -18,7 +18,7 @@ BRIDGE_FILES = (
     "eufy_warm.py", "fetch_deps.js", "gen_go2rtc.py", "get_auth.js",
     "go2rtc.example.yaml", "guided_launcher.py", "ha_setup_trust.py",
     "live_layout.py", "media_route.py", "multichannel_probe.py", "process_ownership.py", "requirements.txt", "remembered_login.py",
-    "sctp_oracle.js", "ptcs_transport.js", "setup_budget.py", "setup_web.py", "startup_controller.py", "token_expiry.py",
+    "sctp_oracle.js", "ptcs_transport.js", "setup_budget.py", "setup_web.py", "startup_controller.py", "startup_policy.py", "token_expiry.py",
     "start_bridge.cmd", "start_bridge.sh", "video_diagnostics.py", "video_pipeline.py",
     "setup_ui/index.html", "setup_ui/setup.css", "setup_ui/setup.js",
 )
@@ -201,4 +201,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
