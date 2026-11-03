@@ -26,12 +26,17 @@ CACHE = {
     "stationSn": "T8N00TEST000001", "region": "us-pr", "webCountry": "AU",
     "accountFingerprint": "a" * 64,
 }
-DISCOVERY = '''import json, os, pathlib, sys
+DISCOVERY = '''import json, os, pathlib, sys, time
 if sys.argv[1:] != ["--discover"]:
     raise RuntimeError("Synthetic transport refuses any media request")
 if any(key in os.environ for key in
        ("SUPERVISOR_TOKEN", "HASSIO_TOKEN", "EUFY_EMAIL", "EUFY_PASSWORD")):
     raise RuntimeError("Protected environment reached discovery")
+pathlib.Path("/tmp/efx-discovery-started").write_text("entered")
+delay = pathlib.Path("/tmp/efx-discovery-delay")
+if delay.exists():
+    if delay.read_text() != "116": raise RuntimeError("Invalid synthetic delay")
+    time.sleep(116)
 state = {"nvr_sn": "T8N00TEST000001", "cameras": [
     {"channel": i, "name": "Synthetic camera " + str(i), "sn": "SYNTHETIC" + str(i),
      "status": 1, "sensor_num": 2} for i in range(4)]}
@@ -95,13 +100,19 @@ async def inside(*, baseline=False):
         await web.TCPSite(runner, "127.0.0.1", 80).start()
         await exercise_worker(guided_launcher, startup_controller, auth_path,
                               original_cache, baseline=baseline)
+        if not baseline:
+            Path("/tmp/efx-discovery-delay").write_text("116")
+            Path("/tmp/efx-discovery-reached").unlink(missing_ok=True)
+            await exercise_worker(guided_launcher, startup_controller, auth_path,
+                                  original_cache, discovery_delay=116)
+            await cancel_during_discovery(guided_launcher, auth_path, original_cache)
         require(bool(requests), "Actual Bashio did not read the synthetic Supervisor options")
     finally:
         await runner.cleanup()
 
 
 async def exercise_worker(guided_launcher, startup_controller, auth_path,
-                          original_cache, *, baseline=False):
+                          original_cache, *, baseline=False, discovery_delay=0):
     from aiohttp import BasicAuth, ClientSession, ClientTimeout
     state = auth_path.parent
     accepted = []
@@ -116,8 +127,9 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
     controller = startup_controller.StartupController(auth_path, worker,
         checker=accepted_account, local_credentials_check=guided_launcher.local_video_ready)
     stopped_in = None
+    started_at = time.monotonic()
     try:
-        async with asyncio.timeout(40):
+        async with asyncio.timeout(40 + discovery_delay):
             await controller.reconcile()
         require(bool(accepted), "Saved account was not checked")
         require(auth_path.read_bytes() == original_cache, "Startup changed saved account data")
@@ -129,6 +141,10 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
             print("PASS: baseline saved-account acceptance followed by legacy-gate failure", flush=True)
             return
         require(controller.state == "video_service_running", "Guided service did not start")
+        if discovery_delay:
+            require(time.monotonic() - started_at >= 116,
+                    "Synthetic slow discovery did not exercise the old cutoff")
+            print("PASS: actual S6 guided worker survived116-second discovery and reached real go2rtc", flush=True)
         require(marker.read_text() == "protected variables absent",
                 "Actual guided discovery did not run with isolated environment")
         async with ClientSession(timeout=ClientTimeout(total=5)) as session:
@@ -153,6 +169,8 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
         require(not worker.running() and not await worker.port_open(), "Stop left a worker or video port")
         print("PASS: real worker cleanup completed in %.2f seconds" % stopped_in, flush=True)
 
+    if discovery_delay:
+        return
     await exercise_auth_middleware(state)
 
     # Normal legacy launches must still require explicit legacy account options,
@@ -173,6 +191,36 @@ async def exercise_worker(guided_launcher, startup_controller, auth_path,
         require(process.returncode != 0 and b"Set 'email' and 'password'" in output,
                 "A normal legacy launch bypassed its credential gate")
     print("PASS: genuine legacy credential gate remains strict with and without the S6 wrapper", flush=True)
+
+
+async def cancel_during_discovery(module, auth_path, original_cache):
+    marker = Path("/tmp/efx-discovery-started")
+    marker.unlink(missing_ok=True)
+    worker = module.MediaWorker(stop_timeout=5)
+    task = asyncio.create_task(worker.start())
+    try:
+        async with asyncio.timeout(15):
+            while not marker.exists():
+                require(not task.done(), "Delayed startup ended before cancellation")
+                await asyncio.sleep(.05)
+        started = time.monotonic()
+        task.cancel()
+        try:
+            async with asyncio.timeout(12):
+                await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise SmokeFailure("Startup did not propagate cancellation")
+        require(time.monotonic() - started < 12, "Cancellation waited for discovery deadline")
+        require(not worker.running() and not await worker.port_open(), "Cancelled startup left video service")
+        require(auth_path.read_bytes() == original_cache, "Cancellation changed saved account")
+        print("PASS: actual S6 cancellation during delayed discovery leaves no worker/listener", flush=True)
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await worker.stop()
 
 
 async def exercise_auth_middleware(state):
@@ -232,7 +280,7 @@ def host(image, *, baseline=False):
     if baseline:
         command.append("--expect-env-marker-failure")
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=110)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=110 if baseline else 110 + 116 + 40 + 12)
         output = result.stdout + result.stderr
         require("synthetic-container-token" not in output and
                 "synthetic-container-password" not in output and FIXTURE_PASSWORD not in output,
