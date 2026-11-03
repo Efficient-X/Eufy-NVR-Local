@@ -20,6 +20,9 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from startup_policy import (DISCOVERY_SESSION_SECONDS, SESSION_LOCK_SECONDS,
+                            SIGNAL_SECONDS, CONNECTION_SECONDS, SESSION_ATTEMPTS,
+                            SESSION_RELEASE_SECONDS, DISCOVERY_BUDGET_SECONDS)
 
 ROOT = Path(__file__).resolve().parent
 ENGINE = ROOT / "eufy_stream.py"
@@ -40,6 +43,7 @@ SESSION_PREEMPT_PATH = Path(
         "/data/eufy-preempt" if Path("/data").is_dir() else ROOT / "eufy-preempt",
     )
 )
+GUIDED_DISCOVERY = os.environ.get("EUFY_GUIDED_WORKER") == "1"
 SESSION_LOCK_POLL = 0.10
 SESSION_RELEASE_DELAY = max(
     0.0, min(float(os.environ.get("EUFY_SESSION_RELEASE_DELAY", "1.0")), 5.0)
@@ -221,6 +225,8 @@ async def run_attempt(
     stop_event: asyncio.Event | None = None,
 ) -> tuple[int, str, SessionState]:
     now = time.monotonic()
+    signal_timeout = SIGNAL_SECONDS if discovery and GUIDED_DISCOVERY else SIGNAL_TIMEOUT
+    connection_timeout = CONNECTION_SECONDS if discovery and GUIDED_DISCOVERY else CONNECTION_TIMEOUT
     state = SessionState(started_at=now, last_progress=now)
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -253,12 +259,16 @@ async def run_attempt(
                 reason = "busy"
                 await _terminate_tree(proc)
                 break
-            if not state.sdp_seen and now - state.started_at >= SIGNAL_TIMEOUT:
+            if discovery and GUIDED_DISCOVERY and now - state.started_at >= DISCOVERY_SESSION_SECONDS:
+                reason = "discovery_timeout"
+                await _terminate_tree(proc)
+                break
+            if not state.sdp_seen and now - state.started_at >= signal_timeout:
                 reason = "signaling_timeout"
                 await _terminate_tree(proc)
                 break
             if state.sdp_seen and not state.datachannel_seen:
-                if now - state.last_progress >= CONNECTION_TIMEOUT:
+                if now - state.last_progress >= connection_timeout:
                     reason = "connection_timeout"
                     await _terminate_tree(proc)
                     break
@@ -302,11 +312,26 @@ async def main(argv: list[str] | None = None) -> int:
             except ValueError:
                 pass
 
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    try:
+        if discovery and GUIDED_DISCOVERY:
+            async with asyncio.timeout(DISCOVERY_BUDGET_SECONDS):
+                return await _run_sessions(args, discovery, stop_event, gate)
+        return await _run_sessions(args, discovery, stop_event, gate)
+    except TimeoutError:
+        print("EUFY_STARTUP discovery_budget_expired", file=sys.stderr, flush=True)
+        return 1
+    finally:
+        gate.release()
+
+
+async def _run_sessions(args, discovery, stop_event, gate):
+    attempts = SESSION_ATTEMPTS if discovery and GUIDED_DISCOVERY else MAX_ATTEMPTS
+    release_delay = SESSION_RELEASE_SECONDS if discovery and GUIDED_DISCOVERY else SESSION_RELEASE_DELAY
+    for attempt in range(1, attempts + 1):
         if attempt > 1:
             delay = min(2 ** (attempt - 2), 4)
             print(
-                f"eufy supervisor: retrying session {attempt}/{MAX_ATTEMPTS} in {delay}s",
+                f"eufy supervisor: retrying session {attempt}/{attempts} in {delay}s",
                 file=sys.stderr,
                 flush=True,
             )
@@ -316,7 +341,16 @@ async def main(argv: list[str] | None = None) -> int:
             except asyncio.TimeoutError:
                 pass
 
-        if not await gate.acquire(stop_event):
+        try:
+            if discovery and GUIDED_DISCOVERY:
+                async with asyncio.timeout(SESSION_LOCK_SECONDS):
+                    acquired = await gate.acquire(stop_event)
+            else:
+                acquired = await gate.acquire(stop_event)
+        except TimeoutError:
+            print("EUFY_STARTUP discovery_lock_timeout", file=sys.stderr, flush=True)
+            return 75
+        if not acquired:
             return 0
         try:
             rc, reason, state = await run_attempt(args, discovery, stop_event)
@@ -327,8 +361,8 @@ async def main(argv: list[str] | None = None) -> int:
             # racing the NVR's internal teardown and receiving status 486. This
             # delay is required when go2rtc sets the stop event for a normal
             # camera handoff, not only when the engine exits on its own.
-            if SESSION_RELEASE_DELAY:
-                await asyncio.sleep(SESSION_RELEASE_DELAY)
+            if release_delay:
+                await asyncio.sleep(release_delay)
             gate.release()
 
         if reason == "shutdown":
@@ -360,7 +394,9 @@ async def main(argv: list[str] | None = None) -> int:
         if rc == 0 and reason == "exit":
             return 0
 
-        if reason == "signaling_timeout":
+        if reason == "discovery_timeout":
+            print("EUFY_STARTUP discovery_session_timeout", file=sys.stderr, flush=True)
+        elif reason == "signaling_timeout":
             detail = "TURN remained pending" if state.turn_pending else "no SDP offer arrived"
             print(
                 f"eufy supervisor: signaling timed out ({detail}); starting a fresh signaling session",
@@ -400,7 +436,7 @@ async def main(argv: list[str] | None = None) -> int:
             )
 
     print(
-        f"eufy supervisor: session failed after {MAX_ATTEMPTS} attempts",
+        f"eufy supervisor: session failed after {attempts} attempts",
         file=sys.stderr,
         flush=True,
     )
