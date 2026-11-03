@@ -1,3 +1,13 @@
+# Draft 0.8.0-alpha.8 - bounded guided startup
+
+- Replace nested discovery retry groups with one shared120-second budget and up
+  to four sessions. A reproduced116-second valid startup is no longer killed by
+  the earlier110-second worker cutoff. Return immediately when ready.
+- Keep missing/rejected sign-in and video startup failures distinct. Retain only
+  bounded, fixed-vocabulary status and transport categories without secrets.
+- Preserve finite cancellation/owned-worker cleanup and legacy/live retry policy.
+- This draft has no physical-recorder acceptance or household root-cause claim.
+
 # 0.8.0-alpha.7 â€” experimental parser and camera-card candidate
 
 - Correct the reproduced dual-lens notification-parser rejection while retaining

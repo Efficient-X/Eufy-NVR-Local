@@ -299,3 +299,27 @@ Do not treat this guide as proof that those checks have passed.
 This is a free independent project by Efficient X (EFX), maintained by Brendon.
 If it helps you, you can [buy EFX a coffee](https://buymeacoffee.com/efficientx).
 A tip is optional and does not buy extra features or guaranteed support.
+
+
+### When the camera service is starting
+
+The app checks your saved sign-in before it starts the video software. Finding the
+recorder can try up to four connections within one shared two-minute window.
+Each discovery connection and lock wait has a finite limit; progress messages
+cannot extend the shared window forever. There is no second hidden retry group.
+The worker has168seconds to become ready, including bounded discovery cleanup,
+local setup and listener startup. Allow up to239seconds (about4minutes) for the
+whole video-start step if an old or failed worker also needs cleanup. Normal
+success returns immediately when ready; these are ceilings, not fixed waits.
+You can leave setup and reopen it without signing in again.
+
+If startup stops, read the last step shown under Camera service. Missing sign-in,
+rejected sign-in, an unavailable internet check, a video port already in use and a
+video-service failure are different conditions. A refused local connection does
+not mean your Eufy password is wrong. Do not repeatedly sign in or restart Home
+Assistant to fix that error.
+
+The app keeps two small private startup-status files, with fixed step names and
+network-error categories only. They replace their previous contents; they do not
+store passwords, tokens, URLs, account names or raw error replies. The last startup
+result survives a normal stop so support can distinguish where startup ended.

@@ -1,5 +1,5 @@
 name: Eufy NVR Local (experimental)
-version: 0.8.0-alpha.7
+version: 0.8.0-alpha.8
 slug: eufy_nvr
 description: Experimental Eufy PoE NVR app with guided setup and shared camera tiles.
   Fresh-install live-camera acceptance pending. Eufy internet sign-in and signalling
