@@ -189,8 +189,8 @@
       "size": 12542
     },
     "bridge/startup_policy.py": {
-      "sha256": "d135181cdbe9ad79a2a85f508c0755e071196827f7af454e91fa29c661e49a68",
-      "size": 6277
+      "sha256": "f0402ed15ff5ec7de0d8b47c94170f15c58629b7f61b54ae9e1ccd904ee00e2d",
+      "size": 6540
     },
     "bridge/token_expiry.py": {
       "sha256": "bd2b391ce09b632727332600ce69de01f0f16c90dc706f819d6144df147bb1ea",
@@ -321,8 +321,8 @@
       "size": 11866
     },
     "docs/SETUP_GUIDE.md": {
-      "sha256": "0ff2be226ec2124daa4a14723448f7eea130f0e9ca2bf2c8e483fc2b2193b025",
-      "size": 17946
+      "sha256": "bd9be1caa576eccedb8cf0bcae4e4cccec9c0463d354bda2888bd21f2c83cfee",
+      "size": 18271
     },
     "eufy_nvr/.dockerignore": {
       "sha256": "106cf62370e852fcebd4652ed9d349c2d253d20f2304ff137de5f76d9b55305d",
@@ -333,8 +333,8 @@
       "size": 32539
     },
     "eufy_nvr/DOCS.md": {
-      "sha256": "0ff2be226ec2124daa4a14723448f7eea130f0e9ca2bf2c8e483fc2b2193b025",
-      "size": 17946
+      "sha256": "bd9be1caa576eccedb8cf0bcae4e4cccec9c0463d354bda2888bd21f2c83cfee",
+      "size": 18271
     },
     "eufy_nvr/Dockerfile": {
       "sha256": "79843d00cf3a93d17c1259ac22f502a3477a1f52a0134d39718d93aa9a77946b",
@@ -477,8 +477,8 @@
       "size": 12542
     },
     "eufy_nvr/bridge/startup_policy.py": {
-      "sha256": "d135181cdbe9ad79a2a85f508c0755e071196827f7af454e91fa29c661e49a68",
-      "size": 6277
+      "sha256": "f0402ed15ff5ec7de0d8b47c94170f15c58629b7f61b54ae9e1ccd904ee00e2d",
+      "size": 6540
     },
     "eufy_nvr/bridge/token_expiry.py": {
       "sha256": "bd2b391ce09b632727332600ce69de01f0f16c90dc706f819d6144df147bb1ea",
@@ -765,8 +765,8 @@
       "size": 7520
     },
     "tests/test_startup_policy.py": {
-      "sha256": "c02ca34d6f73beb5e9a4c3e6b15bd5728d13f33933d610570c01c69dbad3f7e5",
-      "size": 10860
+      "sha256": "7f9095b4d6f0c3732ec7b956ed846f82496c4c6d970c15ee0eb623f47ec71618",
+      "size": 12490
     },
     "tests/test_token_expiry.py": {
       "sha256": "409c4b528769e4f299329f858a3bb21c960806407a8e91bc5629677c745265b1",
