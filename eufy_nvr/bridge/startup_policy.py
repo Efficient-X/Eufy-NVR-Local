@@ -126,7 +126,11 @@ def retain_status(path, area, value):
                 os.unlink(temporary)
             except OSError:
                 pass
-    print("EUFY_STARTUP " + area + "=" + value.get("state", value.get("phase")), flush=True)
+    # Supervisor logs remain readable even before the video API or ingress works.
+    # Reuse the same strict enum validator as private retention; never log errors.
+    record = json.dumps({"area": area, "status": value}, separators=(",", ":"), sort_keys=True)
+    assert len(record.encode("utf-8")) <= 1024
+    print("EUFY_STARTUP " + record, flush=True)
 
 
 def main():
