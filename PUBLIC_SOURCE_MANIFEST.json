@@ -613,8 +613,8 @@
       "size": 2808
     },
     "tests/test_eufy_supervisor.py": {
-      "sha256": "7ebd77f1d1e08f5ffe70f41e9fb34dcaa0d710fb9b336a118f7bf219da9090b2",
-      "size": 3898
+      "sha256": "6f2c4c3a9855aee11835d5909e9222e9b96df7d5405f1a325a7d928f95643c45",
+      "size": 4015
     },
     "tests/test_frontend_registration.py": {
       "sha256": "63427d0f37af6074c70d3665285e26463ace355ca60c837b7deb0ddd6a0fd2a7",
@@ -837,8 +837,8 @@
       "size": 7761
     },
     "tools/s6_guided_entrypoint_smoke.py": {
-      "sha256": "b761004a229b64af3f91c441b5ded4d7d79d0b8ba1d34f49248818eb92fa2673",
-      "size": 13690
+      "sha256": "deb7c8d5e5ec65df809996a43db15f8b6b526b01adb1dc1d6874705f6a5c2740",
+      "size": 16071
     },
     "tools/source_bundle.py": {
       "sha256": "38534495c7bb33d84e7a0ee4cc7ccabf5c6e616d28f9082cd444b0c8264b3082",
