@@ -196,7 +196,9 @@ def test_disk_failure_only_emits_fixed_message(tmp_path, monkeypatch, capsys):
     def fail(*args, **kwargs): raise OSError(PRIVATE)
     monkeypatch.setattr(policy.tempfile, "mkstemp", fail)
     policy.retain_status(tmp_path/"worker.json", "worker", {"phase":"discovering"})
-    assert capsys.readouterr().out == "EUFY_STARTUP status_retention_unavailable\nEUFY_STARTUP worker=discovering\n"
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "EUFY_STARTUP status_retention_unavailable"
+    assert json.loads(lines[1].removeprefix("EUFY_STARTUP ")) == {"area":"worker","status":{"phase":"discovering"}}
 
 
 @pytest.mark.asyncio
@@ -245,3 +247,29 @@ async def test_flat_retry_sequence_preserves_the_116_second_valid_path(monkeypat
     assert await eufy_run._run_sessions(["--discover"], True, asyncio.Event(), gate) == 0
     assert len(calls) == 4 and now[0] == 116
     assert now[0] < policy.DISCOVERY_BUDGET_SECONDS
+
+
+@pytest.mark.parametrize("state,warning,account,video", [
+    ("connection_unavailable","account_check_unavailable","connection_reset",None),
+    ("service_error",None,"http_response","connection_refused"),
+    ("service_error",None,None,"timeout"),
+])
+def test_status_log_exposes_only_fixed_schema_before_video_or_ingress(tmp_path,capsys,state,warning,account,video):
+    value = {**result(state),"warning":warning,"account_transport":account,"video_transport":video}
+    policy.retain_status(tmp_path/"runtime", "runtime", {**value,"last_result":value})
+    line = capsys.readouterr().out.strip()
+    assert line.startswith("EUFY_STARTUP {") and len(line.encode()) <= 1100
+    record = json.loads(line.removeprefix("EUFY_STARTUP "))
+    assert set(record) == {"area","status"} and record["area"] == "runtime"
+    checked = policy.checked_status(record["status"], "runtime")
+    assert (checked["state"],checked["warning"],checked["account_transport"],checked["video_transport"]) == (state,warning,account,video)
+    assert PRIVATE not in line and str(tmp_path) not in line
+
+
+@pytest.mark.parametrize("field", ["warning","account_transport","video_transport","worker_phase"])
+def test_untrusted_runtime_text_cannot_enter_log_or_file(tmp_path,capsys,field):
+    value = {**result(),field:PRIVATE,"last_result":None}
+    with pytest.raises((ValueError,TypeError)):
+        policy.retain_status(tmp_path/"runtime", "runtime", value)
+    assert capsys.readouterr() == ("","")
+    assert not list(tmp_path.iterdir())
