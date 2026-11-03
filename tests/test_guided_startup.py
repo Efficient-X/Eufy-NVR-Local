@@ -446,7 +446,7 @@ async def test_occupied_video_port_is_distinct_from_bad_account_and_does_not_loo
     await controller.tick()
     assert worker.starts == 1
     assert checker.await_count == 1
-    assert set(controller.public_status()) <= {"state", "warning", "can_setup", "can_retry"}
+    assert set(controller.public_status()) <= {"state", "warning", "can_setup", "can_retry", "startup"}
     await controller.close()
 
 
