@@ -1,17 +1,36 @@
-# Draft 0.8.0-alpha.8 - bounded camera startup
+# 0.8.0-alpha.8 - public experimental preview
 
-This source candidate fixes an early startup timeout. Guided startup now has one
-shared two-minute discovery window and up to four connection attempts, instead of
-two nested groups of three attempts. A valid slow discovery can finish after the
-old110-second limit. Normal success returns as soon as the video service is ready;
-it does not wait for the deadline. Local setup and cleanup have finite limits too.
+**Published prerelease. Fresh-install live-camera acceptance has not passed.**
 
-Setup shows the last startup step and keeps only fixed, secret-safe status labels.
-A local connection that does not answer is not described as a bad Eufy password.
+## Recorder test update - 4 November 2026
 
-This is a draft development candidate. Native Linux/S6, image-build and physical
-recorder checks are required before release or household deployment. The reproduced
-timing defect has not been established as the cause of a specific failed installation.
+In the latest physical-recorder test, discovery reached its shared time limit
+and startup stopped because no saved camera configuration was available. The
+working household engine was restored. An earlier household build has shown
+four dual-lens cameras as eight moving views with working enlargement. That is
+a different build and is not a beta.1 download available from these releases.
+It does not validate the public alpha.8 preview.
+
+Alpha.8 remains available for experimental testing and feedback. Keep a working
+camera installation until a replacement passes on your recorder, and do not run
+two competing recorder video engines. See the [installation steps](README.md#install-the-experimental-preview)
+and [report your results](https://github.com/Efficient-X/Eufy-NVR-Local/issues/new).
+Do not post passwords, tokens, private account files, HA backups, unreviewed raw
+logs or private camera pictures.
+
+## What alpha.8 changed
+
+Guided startup uses one shared 120-second discovery window with at most four
+connection attempts. A synthetic 116-second successful start passes its timing
+regression check. Status records and cancellation/cleanup have bounded paths.
+Those offline and container checks do not prove real-recorder discovery or
+live-camera playback. No new product fix is claimed by this documentation update.
+
+The source tag and versioned images remain unchanged. This is an independent
+Efficient X (EFX) project, not endorsed by eufy or Home Assistant. Optional support:
+https://buymeacoffee.com/efficientx
+
+[Alpha.8 release](https://github.com/Efficient-X/Eufy-NVR-Local/releases/tag/v0.8.0-alpha.8)
 
 # 0.8.0-alpha.7 — experimental
 
